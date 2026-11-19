@@ -10,9 +10,8 @@ ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR"
 
 if [ ! -x node_modules/.bin/prettier ]; then
-  echo "Prettier is not installed/configured yet (added in Phase 0.3)."
-  echo "Install dependencies first: ./scripts/setup.sh"
-  exit 0
+  echo "Prettier is not installed. Run ./scripts/setup.sh first." >&2
+  exit 1
 fi
 
 case "${1:-}" in

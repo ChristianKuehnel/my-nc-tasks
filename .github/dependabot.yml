@@ -1,0 +1,20 @@
+version: 2
+updates:
+  - package-ecosystem: 'npm'
+    directory: '/'
+    schedule:
+      interval: weekly
+    groups:
+      # Keep the Expo SDK aligned as a single update to avoid partial bumps.
+      expo:
+        patterns:
+          - 'expo'
+          - 'expo-*'
+          - 'react-native'
+          - 'react-native-*'
+          - 'react'
+          - 'react-dom'
+  - package-ecosystem: 'github-actions'
+    directory: '/'
+    schedule:
+      interval: weekly

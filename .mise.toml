@@ -3,5 +3,5 @@
 # field in package.json (Corepack). See docs/development.md.
 
 [tools]
-node = "22.22.0"
+node = "22.23.5"
 pnpm = "12.21.0"

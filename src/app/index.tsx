@@ -12,9 +12,7 @@ export default function HomeScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
         <Text style={styles.title}>my-nc-tasks</Text>
-        <Text style={styles.subtitle}>
-          Offline-first task app for Nextcloud
-        </Text>
+        <Text style={styles.subtitle}>Offline-first task app for Nextcloud</Text>
         <Text style={styles.status}>Phase 0 baseline — tooling and CI setup</Text>
       </View>
     </SafeAreaView>

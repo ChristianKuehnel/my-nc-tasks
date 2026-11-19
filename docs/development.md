@@ -6,17 +6,19 @@ The workflow works for human developers and coding agents alike.
 ## Requirements
 
 - **Linux or macOS** (Linux is the primary development platform).
-- **Node.js 22.22.0** (pinned in `.node-version`). Expo SDK 58 accepts
-  >= 22.13 on the 22.x line, >= 24.3 on the 24.x line, or >= 26, but CI and
-  documentation assume the pinned version. Install via your distribution,
-  [nvm](https://github.com/nvm-sh/nvm), or [mise](https://mise.jdx.dev).
+- **Node.js 22.23.5** (pinned in `.node-version`). Expo SDK 58 accepts
+  > = 22.13 on the 22.x line, >= 24.3 on the 24.x line, or >= 26; the pin is
+  > the latest 22.x LTS and is also required by some tooling (lint-staged 17
+  > needs >= 22.22.1). CI always installs the pinned version; a local
+  > mismatch produces a non-fatal warning. Install via your distribution,
+  > [nvm](https://github.com/nvm-sh/nvm), or [mise](https://mise.jdx.dev).
 - **No global npm packages required.** pnpm is pinned in `package.json`
   (`packageManager: pnpm@12.21.0`) and activated through **Corepack**
   (shipped with Node) or **mise** (see `.mise.toml`).
 
 > **Corepack version note:** pnpm 12 uses a native-binary layout that requires
-> **Corepack >= 0.36**. The Corepack bundled with Node 22.22.0 is 0.34 and
-> cannot start pnpm 12. If `pnpm -v` fails with a "Cannot find module
+> **Corepack >= 0.36**. The Corepack bundled with Node 22.x (0.34) cannot
+> start pnpm 12. If `pnpm -v` fails with a "Cannot find module
 > .../pnpm.cjs" error, install a newer Corepack at user level (no root needed):
 >
 > ```sh
@@ -111,13 +113,13 @@ run `pnpm format && pnpm check` before committing/pushing.
 
 ## Scripts overview
 
-| Script | Purpose |
-| ------ | ------- |
-| `./scripts/setup.sh` | Idempotent environment + dependency setup |
-| `./scripts/doctor.sh` | Actionable environment diagnostics |
-| `./scripts/dev.sh [--tunnel]` | Start the Expo dev server |
-| `./scripts/test.sh` | Full local quality gate |
-| `./scripts/format.sh [--check]` | Prettier format / check |
+| Script                          | Purpose                                   |
+| ------------------------------- | ----------------------------------------- |
+| `./scripts/setup.sh`            | Idempotent environment + dependency setup |
+| `./scripts/doctor.sh`           | Actionable environment diagnostics        |
+| `./scripts/dev.sh [--tunnel]`   | Start the Expo dev server                 |
+| `./scripts/test.sh`             | Full local quality gate                   |
+| `./scripts/format.sh [--check]` | Prettier format / check                   |
 
 ## Project layout
 
@@ -125,9 +127,9 @@ run `pnpm format && pnpm check` before committing/pushing.
 - `src/features/` — feature modules (added as phases land).
 - `src/services/` — protocol, persistence, and Nextcloud services.
 - `src/components/`, `src/hooks/`, `src/constants/` — shared UI building
-  blocks from the Expo template.
-- `tests/` — unit, integration, and fixtures (added with the test runner in
-  Phase 0.3).
+  blocks (added as features land).
+- `tests/` — unit, integration, and fixtures (Jest + jest-expo, React
+  Native Testing Library).
 - `scripts/` — the environment scripts above.
 - `docs/` — architecture, this guide, roadmap, and phase verification.
 

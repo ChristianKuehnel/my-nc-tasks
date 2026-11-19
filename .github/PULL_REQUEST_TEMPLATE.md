@@ -9,9 +9,11 @@ Closes #<!-- issue number -->
 ## Scope and non-goals
 
 **In scope:**
+
 - <!-- bullet list -->
 
 **Explicitly not in scope (separate PRs):**
+
 - <!-- bullet list -->
 
 ## Changes
