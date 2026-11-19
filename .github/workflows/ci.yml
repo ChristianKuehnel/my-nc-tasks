@@ -4,6 +4,15 @@
 # They validate the JavaScript bundle (Metro/Hermes), the Expo project
 # configuration, and the code quality gate. Native iOS builds are produced
 # by EAS (see docs/development.md and the Phase 0.6 issue).
+#
+# Toolchain notes:
+# - The Corepack bundled with Node 22.x is 0.34 and cannot start pnpm 12
+#   (native binary layout), so a current Corepack is installed explicitly.
+#   This happens twice per job: once with the runner image's Node (so
+#   actions/setup-node can compute the pnpm store cache key via
+#   `pnpm store path`) and once after the pinned Node is on PATH (so the
+#   pinned prefix also carries Corepack >= 0.36).
+# - The pnpm version itself is always pinned via the packageManager field.
 
 name: CI
 
@@ -32,16 +41,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Install Corepack >= 0.36 (runner image Node, for cache key)
+        run: npm install -g corepack@0.36.0 && corepack enable
+
       - name: Set up Node.js (pinned in .node-version)
         uses: actions/setup-node@v4
         with:
           node-version-file: .node-version
           cache: pnpm
 
-      # The Corepack bundled with Node 22.x is 0.34 and cannot start
-      # pnpm 12 (native binary layout); install a current Corepack first.
-      # The pnpm version itself is pinned via the packageManager field.
-      - name: Install Corepack >= 0.36
+      - name: Install Corepack >= 0.36 (pinned Node prefix)
         run: npm install -g corepack@0.36.0 && corepack enable
 
       - name: Install dependencies (frozen lockfile)
@@ -69,13 +78,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Install Corepack >= 0.36 (runner image Node, for cache key)
+        run: npm install -g corepack@0.36.0 && corepack enable
+
       - name: Set up Node.js (pinned in .node-version)
         uses: actions/setup-node@v4
         with:
           node-version-file: .node-version
           cache: pnpm
 
-      - name: Install Corepack >= 0.36
+      - name: Install Corepack >= 0.36 (pinned Node prefix)
         run: npm install -g corepack@0.36.0 && corepack enable
 
       - name: Install dependencies (frozen lockfile)
@@ -91,13 +103,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Install Corepack >= 0.36 (runner image Node, for cache key)
+        run: npm install -g corepack@0.36.0 && corepack enable
+
       - name: Set up Node.js (pinned in .node-version)
         uses: actions/setup-node@v4
         with:
           node-version-file: .node-version
           cache: pnpm
 
-      - name: Install Corepack >= 0.36
+      - name: Install Corepack >= 0.36 (pinned Node prefix)
         run: npm install -g corepack@0.36.0 && corepack enable
 
       - name: Install dependencies (frozen lockfile)
