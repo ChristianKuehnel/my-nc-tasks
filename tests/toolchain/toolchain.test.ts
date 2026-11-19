@@ -13,9 +13,9 @@ function read(rootFile: string): string {
 }
 
 describe('toolchain pinning', () => {
-  it('pins a Node 20.x version in .node-version and .mise.toml', () => {
+  it('pins a Node 22.x version in .node-version and .mise.toml', () => {
     const nodeVersion = read('.node-version');
-    expect(nodeVersion).toMatch(/^20\.\d+\.\d+$/);
+    expect(nodeVersion).toMatch(/^22\.\d+\.\d+$/);
     expect(read('.mise.toml')).toContain(`node = "${nodeVersion}"`);
   });
 
