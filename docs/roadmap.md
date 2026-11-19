@@ -14,8 +14,8 @@ Status legend (kept truthful — never label work "complete" from generated code
 
 | Item | Description | Status |
 | ---- | ----------- | ------ |
-| 0.1 | Repository bootstrap and governance (LICENSE, NOTICE, AGENTS, docs, templates) | in progress |
-| 0.2 | Reproducible Linux/agent development environment (Expo SDK 58, pinned Node/pnpm, scripts) | planned |
+| 0.1 | Repository bootstrap and governance (LICENSE, NOTICE, AGENTS, docs, templates) | merged and verified |
+| 0.2 | Reproducible Linux/agent development environment (Expo SDK 58, pinned Node/pnpm, scripts) | in progress |
 | 0.3 | Automated code quality, static analysis and tests (Prettier, ESLint, TS strict, Jest, coverage, Dependabot, pre-commit hooks) | planned |
 | 0.4 | GitHub Actions CI and build validation (frozen installs, quality checks, expo-doctor, CodeQL) | planned |
 | 0.5 | Minimal interactive Hello World app on a physical iPhone via Expo Go | planned |

@@ -8,27 +8,39 @@ dist/
 web-build/
 expo-env.d.ts
 
-# Native build artifacts
-ios/Pods/
-ios/build/
-ios/DerivedData/
-android/.gradle/
-android/build/
-android/app/build/
+# Metro
+.metro-health-check*
+
+# Generated native folders (produced by `expo prebuild`; not committed in managed workflow)
+/ios
+/android
+.kotlin/
+*.orig.*
+
+# Signing and keystore material (never commit)
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+keychains/
+
+# Build artifacts
 *.ipa
 *.apk
+ios/build/
+ios/Pods/
+android/app/build/
 
 # Environment and secrets (never commit)
 .env
 .env.*
 !.env.example
-*.pem
-*.p12
-*.mobileprovision
-keychains/
+.env*.local
 
 # macOS
 .DS_Store
+*.pem
 
 # Editors and tools
 .idea/
@@ -46,3 +58,5 @@ coverage/
 # Logs
 npm-debug.log*
 pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
