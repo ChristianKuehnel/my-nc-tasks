@@ -85,8 +85,22 @@ non-zero when a required check fails.
    double-tapping `R` in the Expo Go window; live code reloading applies
    edits without a full restart.
 
-> **Gate note (Phase 0.5):** running on a physical iPhone via Expo Go is a
-> mandatory, human-verified gate. An automated check is not a substitute.
+### Phase 0.5 gate: verifying the Hello World app
+
+The current app is the Phase 0.5 Hello World screen (issue #4): a greeting
+plus one button with a press counter. To pass the Phase 0 gate, verify on
+the physical iPhone that:
+
+1. The screen shows **"Hello from my-nc-tasks"** and "Not pressed yet".
+2. Tapping **"Tap to increment"** increments the counter
+   ("Pressed 1 time", "Pressed 2 times", ...).
+3. Fast Refresh works: while the dev server runs, edit
+   `src/app/index.tsx` (e.g. change the greeting text), save, and press `r`
+   in the terminal (or double-tap `R` in Expo Go) — the screen updates
+   without a reinstall or a full restart.
+
+> **Gate note (Phase 0.5):** this human verification on a physical iPhone is
+> mandatory. An automated test is not a substitute.
 
 ### On the simulator (macOS only)
 
