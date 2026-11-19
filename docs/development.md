@@ -111,6 +111,31 @@ pnpm check           # the whole gate in one command
 A noninteractive equivalent of the pre-commit hook (for agents and CI):
 run `pnpm format && pnpm check` before committing/pushing.
 
+## Continuous integration
+
+GitHub Actions (`.github/workflows/ci.yml`) runs on every push to `main`
+and on every pull request targeting `main`. The three required checks
+(enforced by the `main` branch protection ruleset):
+
+| Check          | What it validates                                                            |
+| -------------- | ---------------------------------------------------------------------------- |
+| `quality-gate` | Prettier check, ESLint, TypeScript strict, Jest + coverage, dependency audit |
+| `expo-doctor`  | Expo project/dependency configuration (20 checks)                            |
+| `ios-bundle`   | `expo export --platform ios` — the Metro/Hermes bundle actually builds       |
+
+CodeQL runs via GitHub's code scanning default setup (JavaScript/TypeScript,
+default query suite) — no custom scanner workflow, no duplication.
+
+> **Scope note:** all CI checks run on Linux. They are **not** an iOS
+> native compile — they validate the JavaScript bundle, the Expo
+> configuration, and code quality. Native iOS builds are produced by EAS
+> (see below / Phase 0.6).
+
+Environment handling in CI mirrors the local setup: Node from
+`.node-version`, Corepack >= 0.36 installed explicitly (the Corepack
+bundled with Node 22.x cannot start pnpm 12), pnpm pinned via the
+`packageManager` field, `pnpm install --frozen-lockfile`.
+
 ## Scripts overview
 
 | Script                          | Purpose                                   |
