@@ -22,10 +22,13 @@ Status legend (kept truthful — never label work "complete" from generated code
 | 0.6  | EAS build/release pipeline smoke test (config + workflow; native build gated by credentials)                                  | implemented; automated tests passed\*      |
 
 \* **0.6 note:** `eas.json` (three profiles) and the manually triggered smoke-build
-workflow are in place and validated with `eas build:inspect`. The native iOS
-build/install is **blocked** pending Expo (`EXPO_TOKEN`) / Apple Developer Program
-credentials, or an explicit user waiver — Expo Go remains the working development
-path.
+workflow are in place and validated against the official `@expo/eas-json` schema.
+The native iOS build/install step of the Phase 0 gate was **explicitly waived by
+the user on 2026-11-19** (no Expo/Apple credentials available in this
+environment). Limitations: no signed native binary has ever been installed or
+launched; Expo Go remains the day-to-day development path. The EAS configuration
+and workflow are ready for use as soon as credentials exist
+(set `EXPO_TOKEN` repo secret → run the "EAS smoke build" workflow).
 
 **Phase 0 hard gate:** no Phase 1 work until items 1–6 of the plan's gate are met
 (public repo + PR workflow, green Linux setup/doctor/CI, human-verified Hello World
@@ -34,8 +37,8 @@ explicitly waived by the user**).
 
 Current gate state (as of Phase 0.6): public repo + PR workflow done;
 Linux setup/doctor/CI green; Hello World app merged (0.5) — **human
-device verification still pending**; EAS native build **blocked or
-awaiting waiver**.
+device verification still pending**; EAS native build **waived by the
+user** (see 0.6 note).
 
 ## Phase 1 — Nextcloud authentication, discovery, lists, sharing
 

@@ -222,10 +222,11 @@ internal` (requires `EXPO_TOKEN` in the environment).
   set, and runs `eas build --no-wait` otherwise — the build continues
   in the EAS cloud and is tracked in the Expo dashboard.
 
-Build costs are controlled by the account holder. Until Expo/Apple
-credentials are provisioned (or the step is explicitly waived), the
-native build/install is marked `blocked` in the roadmap — Expo Go
-remains the working development path.
+Build costs are controlled by the account holder. The native
+build/install step of the Phase 0 gate was **explicitly waived by the
+user (2026-11-19)** because no Expo/Apple credentials are available in
+this environment; see the 0.6 note in `docs/roadmap.md` for the
+documented limitations. Expo Go remains the working development path.
 
 ## Working as an agent
 
