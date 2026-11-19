@@ -15,10 +15,10 @@ Status legend (kept truthful — never label work "complete" from generated code
 | Item | Description                                                                                                                   | Status              |
 | ---- | ----------------------------------------------------------------------------------------------------------------------------- | ------------------- |
 | 0.1  | Repository bootstrap and governance (LICENSE, NOTICE, AGENTS, docs, templates)                                                | merged and verified |
-| 0.2  | Reproducible Linux/agent development environment (Expo SDK 58, pinned Node/pnpm, scripts)                                     | in progress         |
-| 0.3  | Automated code quality, static analysis and tests (Prettier, ESLint, TS strict, Jest, coverage, Dependabot, pre-commit hooks) | in progress         |
-| 0.4  | GitHub Actions CI and build validation (frozen installs, quality checks, expo-doctor, CodeQL)                                 | in progress         |
-| 0.5  | Minimal interactive Hello World app on a physical iPhone via Expo Go                                                          | planned             |
+| 0.2  | Reproducible Linux/agent development environment (Expo SDK 58, pinned Node/pnpm, scripts)                                     | merged and verified |
+| 0.3  | Automated code quality, static analysis and tests (Prettier, ESLint, TS strict, Jest, coverage, Dependabot, pre-commit hooks) | merged and verified |
+| 0.4  | GitHub Actions CI and build validation (frozen installs, quality checks, expo-doctor, CodeQL)                                 | merged and verified |
+| 0.5  | Minimal interactive Hello World app on a physical iPhone via Expo Go                                                          | in progress         |
 | 0.6  | EAS build/release pipeline smoke test (config + workflow; native build gated by credentials)                                  | planned             |
 
 **Phase 0 hard gate:** no Phase 1 work until items 1–6 of the plan's gate are met

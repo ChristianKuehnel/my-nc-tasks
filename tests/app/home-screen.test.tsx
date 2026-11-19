@@ -1,20 +1,24 @@
-import { render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen } from '@testing-library/react-native';
 
 import HomeScreen from '@/app/index';
 
-describe('HomeScreen (Phase 0 baseline)', () => {
-  it('renders the project name', async () => {
+describe('HomeScreen (Phase 0.5 Hello World)', () => {
+  it('renders the greeting', async () => {
     await render(<HomeScreen />);
-    expect(screen.getByText('my-nc-tasks')).toBeDefined();
+    expect(screen.getByText('Hello from my-nc-tasks')).toBeDefined();
   });
 
-  it('renders the project tagline', async () => {
+  it('shows the initial counter state', async () => {
     await render(<HomeScreen />);
-    expect(screen.getByText('Offline-first task app for Nextcloud')).toBeDefined();
+    expect(screen.getByText('Not pressed yet')).toBeDefined();
   });
 
-  it('shows that this is the Phase 0 baseline', async () => {
+  it('increments the counter on button press', async () => {
     await render(<HomeScreen />);
-    expect(screen.getByText('Phase 0 baseline — tooling and CI setup')).toBeDefined();
+    const button = screen.getByLabelText('Increment counter');
+    await fireEvent.press(button);
+    expect(screen.getByText('Pressed 1 time')).toBeDefined();
+    await fireEvent.press(button);
+    expect(screen.getByText('Pressed 2 times')).toBeDefined();
   });
 });
