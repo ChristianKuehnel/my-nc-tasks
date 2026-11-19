@@ -184,16 +184,48 @@ bundled with Node 22.x cannot start pnpm 12), pnpm pinned via the
 
 ## EAS builds and distribution
 
-`eas.json` (added in Phase 0.6) defines `development`, `internal`, and
-`production` profiles. Building native iOS binaries requires:
+`eas.json` defines three build profiles (Phase 0.6):
 
-- An **Expo (EAS) account** and a machine token (`EXPO_TOKEN`), never
-  committed to the repository.
-- An **Apple Developer Program** account for signing and TestFlight.
+| Profile       | Purpose                                                           | Key options                                                                                                      |
+| ------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `development` | Native development client (iterating on code with native modules) | `developmentClient: true`, `distribution: internal`, channel `development`                                       |
+| `internal`    | TestFlight internal preview builds                                | `distribution: internal`, channel `internal`                                                                     |
+| `production`  | App Store submission                                              | `distribution: store`, channel `production` (`submit.production` runs `eas submit` against TestFlight/App Store) |
 
-Build costs are controlled by the account holder. Until credentials exist,
-native builds are marked `blocked` in the roadmap — Expo Go remains the
-working development path. See the Phase 0.6 issue for the full workflow.
+`appVersionSource: remote` lets EAS manage the iOS build number.
+
+**Expo Go vs. dev client:** day-to-day development uses Expo Go (no
+build required, see above). The `development` profile is only needed
+once the project uses native modules that Expo Go does not ship.
+
+### Accounts and credentials (never committed)
+
+- **Expo account** (free tier supports EAS Build) and an access token
+  exposed as the repository secret `EXPO_TOKEN`.
+- **Apple Developer Program** account ($99/year) for signing,
+  TestFlight, and App Store submission. EAS can use Apple credentials
+  stored in the Expo dashboard (remote signing) or your local
+  `~/Library/Keychains`/CI credentials (local signing) — nothing is
+  stored in this repository.
+- **Device registration** for ad-hoc/TestFlight internal testing is
+  handled via TestFlight (Apple manages device UDIDs for internal
+  testers); no manual provisioning profiles are required with EAS
+  remote signing.
+
+### Triggering builds from Linux
+
+- **Manually:** `pnpm dlx eas-cli build --platform ios --profile
+internal` (requires `EXPO_TOKEN` in the environment).
+- **Via CI:** the `EAS smoke build` workflow
+  (`.github/workflows/eas-smoke-build.yml`, manual dispatch, profile
+  choice). It fails fast with instructions when `EXPO_TOKEN` is not
+  set, and runs `eas build --no-wait` otherwise — the build continues
+  in the EAS cloud and is tracked in the Expo dashboard.
+
+Build costs are controlled by the account holder. Until Expo/Apple
+credentials are provisioned (or the step is explicitly waived), the
+native build/install is marked `blocked` in the roadmap — Expo Go
+remains the working development path.
 
 ## Working as an agent
 

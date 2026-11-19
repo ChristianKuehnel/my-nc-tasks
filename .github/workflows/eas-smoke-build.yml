@@ -1,0 +1,65 @@
+# EAS smoke build: manually triggered native iOS build via EAS Build.
+#
+# Requires the repository secret EXPO_TOKEN (Expo account access token).
+# When the secret is missing, the run fails fast with instructions and
+# nothing is billed. Apple credentials are NOT stored in this repository
+# (see docs/development.md, "EAS builds and distribution").
+
+name: EAS smoke build
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: EAS build profile (eas.json)
+        required: true
+        default: development
+        type: choice
+        options:
+          - development
+          - internal
+
+permissions:
+  contents: read
+
+concurrency:
+  group: eas-smoke-build
+  cancel-in-progress: false
+
+jobs:
+  smoke-build:
+    name: EAS build (iOS, ${{ github.event.inputs.profile }})
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check EAS credentials
+        if: ${{ secrets.EXPO_TOKEN == '' }}
+        run: |
+          echo "::error::EAS smoke build is BLOCKED: the EXPO_TOKEN repository secret is not set."
+          echo "::error::Create an access token in the Expo account dashboard and add it as the repository secret EXPO_TOKEN."
+          echo "::error::See docs/development.md, 'EAS builds and distribution'."
+          exit 1
+
+      - name: Checkout
+        if: ${{ secrets.EXPO_TOKEN != '' }}
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js (pinned in .node-version)
+        if: ${{ secrets.EXPO_TOKEN != '' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+
+      - name: Install EAS CLI
+        if: ${{ secrets.EXPO_TOKEN != '' }}
+        run: npm install -g eas-cli
+
+      - name: Run EAS build (no wait)
+        if: ${{ secrets.EXPO_TOKEN != '' }}
+        run: |
+          eas build \
+            --platform ios \
+            --profile "${{ github.event.inputs.profile }}" \
+            --non-interactive \
+            --no-wait
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
