@@ -1,0 +1,48 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Native build artifacts
+ios/Pods/
+ios/build/
+ios/DerivedData/
+android/.gradle/
+android/build/
+android/app/build/
+*.ipa
+*.apk
+
+# Environment and secrets (never commit)
+.env
+.env.*
+!.env.example
+*.pem
+*.p12
+*.mobileprovision
+keychains/
+
+# macOS
+.DS_Store
+
+# Editors and tools
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+*.swp
+.husky/_/
+
+# Test and coverage artifacts
+coverage/
+.nyc_output/
+*.tsbuildinfo
+
+# Logs
+npm-debug.log*
+pnpm-debug.log*

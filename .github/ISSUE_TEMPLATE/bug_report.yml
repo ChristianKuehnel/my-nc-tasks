@@ -1,0 +1,36 @@
+name: Bug report
+description: Report a bug or unexpected behavior in my-nc-tasks
+labels: [bug]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Describe the actual behavior and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Numbered steps, exact commands, and any relevant Nextcloud version.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: |
+        - OS / device (e.g. iPhone 15, iOS 18)
+        - Expo Go or development build version
+        - Nextcloud server version
+        - Relevant app logs (no credentials or task content)
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / error output
+      description: Paste relevant output. **Never include credentials or real task data.**
+    validations:
+      required: false
