@@ -12,14 +12,14 @@ Status legend (kept truthful — never label work "complete" from generated code
 
 ## Phase 0 — Bootstrap, tooling, CI, iPhone Hello World (mandatory gate)
 
-| Item | Description                                                                                                                   | Status                                     |
-| ---- | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
-| 0.1  | Repository bootstrap and governance (LICENSE, NOTICE, AGENTS, docs, templates)                                                | merged and verified                        |
-| 0.2  | Reproducible Linux/agent development environment (Expo SDK 58, pinned Node/pnpm, scripts)                                     | merged and verified                        |
-| 0.3  | Automated code quality, static analysis and tests (Prettier, ESLint, TS strict, Jest, coverage, Dependabot, pre-commit hooks) | merged and verified                        |
-| 0.4  | GitHub Actions CI and build validation (frozen installs, quality checks, expo-doctor, CodeQL)                                 | merged and verified                        |
-| 0.5  | Minimal interactive Hello World app on a physical iPhone via Expo Go                                                          | awaiting manual device/server verification |
-| 0.6  | EAS build/release pipeline smoke test (config + workflow; native build gated by credentials)                                  | implemented; automated tests passed\*      |
+| Item | Description                                                                                                                   | Status                                |
+| ---- | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
+| 0.1  | Repository bootstrap and governance (LICENSE, NOTICE, AGENTS, docs, templates)                                                | merged and verified                   |
+| 0.2  | Reproducible Linux/agent development environment (Expo SDK 58, pinned Node/pnpm, scripts)                                     | merged and verified                   |
+| 0.3  | Automated code quality, static analysis and tests (Prettier, ESLint, TS strict, Jest, coverage, Dependabot, pre-commit hooks) | merged and verified                   |
+| 0.4  | GitHub Actions CI and build validation (frozen installs, quality checks, expo-doctor, CodeQL)                                 | merged and verified                   |
+| 0.5  | Minimal interactive Hello World app on a physical iPhone via Expo Go                                                          | merged and verified                   |
+| 0.6  | EAS build/release pipeline smoke test (config + workflow; native build gated by credentials)                                  | implemented; automated tests passed\* |
 
 \* **0.6 note:** `eas.json` (three profiles) and the manually triggered smoke-build
 workflow are in place and validated against the official `@expo/eas-json` schema.
@@ -35,21 +35,22 @@ and workflow are ready for use as soon as credentials exist
 on a physical iPhone via Expo Go, and EAS smoke test installed on-device **or
 explicitly waived by the user**).
 
-Current gate state (as of Phase 0.6): public repo + PR workflow done;
-Linux setup/doctor/CI green; Hello World app merged (0.5) — **human
-device verification still pending**; EAS native build **waived by the
-user** (see 0.6 note).
+**Gate state: SATISFIED (2026-11-20).** Public repo + PR workflow done;
+Linux setup/doctor/CI green; the user confirmed the Hello World app on a
+physical iPhone via Expo Go (greeting visible, counter increments, Fast
+Refresh works); EAS native build **waived by the user** (see 0.6 note).
+Phase 1 may proceed.
 
 ## Phase 1 — Nextcloud authentication, discovery, lists, sharing
 
-| Item | Description                                                                 | Status  |
-| ---- | --------------------------------------------------------------------------- | ------- |
-| 1.1  | Nextcloud Login Flow v2 (browser login, polling, SecureStore sessions, MFA) | planned |
-| 1.2  | CalDAV discovery (principals, calendar home, VTODO calendars, permissions)  | planned |
-| 1.3  | List browsing and create (owned + shared, empty/loading/error states)       | planned |
-| 1.4  | Rename / delete / unsubscribe (safe, permission-aware)                      | planned |
-| 1.5  | List sharing (Nextcloud DAV sharing extensions, capability detection)       | planned |
-| 1.6  | Phase 1 integration hardening (e2e paths, compatibility matrix)             | planned |
+| Item | Description                                                                 | Status      |
+| ---- | --------------------------------------------------------------------------- | ----------- |
+| 1.1  | Nextcloud Login Flow v2 (browser login, polling, SecureStore sessions, MFA) | in progress |
+| 1.2  | CalDAV discovery (principals, calendar home, VTODO calendars, permissions)  | planned     |
+| 1.3  | List browsing and create (owned + shared, empty/loading/error states)       | planned     |
+| 1.4  | Rename / delete / unsubscribe (safe, permission-aware)                      | planned     |
+| 1.5  | List sharing (Nextcloud DAV sharing extensions, capability detection)       | planned     |
+| 1.6  | Phase 1 integration hardening (e2e paths, compatibility matrix)             | planned     |
 
 ## Phase 2 — Task operations and Reminders-inspired UI
 
