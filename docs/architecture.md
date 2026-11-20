@@ -87,6 +87,46 @@ Rules:
   abstractions so features can degrade gracefully when unavailable
   (e.g. under Expo Go limitations).
 
+## Nextcloud Login Flow v2 (authentication)
+
+Login Flow v2 is the sole authentication mechanism (Phase 1.1, issue #14).
+Reference implementation: Nextcloud server core,
+`core/Controller/ClientFlowLoginV2Controller.php`.
+
+Protocol (as implemented by Nextcloud 28+):
+
+1. `POST {server}/login/v2` → `200 { "poll": { "token", "endpoint" }, "login": "<absolute login URL>" }`
+2. The user completes the login in the opened in-app browser (SFSafariViewController
+   via `expo-web-browser` `openAuthSessionAsync`). **MFA / 2FA is handled
+   entirely by the server-rendered login page** — the app never sees or
+   transmits the user password.
+3. The app polls `POST {poll.endpoint}` with the form field `token`:
+   `404` (empty body) while the flow is pending,
+   `200 { "server", "loginName", "appPassword" }` when done.
+
+Implementation notes:
+
+- The protocol layer is `src/services/nextcloud` (pure TypeScript,
+  injectable `fetch`/clock/delay — deterministic unit tests, no timers).
+- The state machine lives in `src/features/auth/use-auth.ts`:
+  `restoring → unauthenticated → authenticating → authenticated`.
+- Polling runs with a 2 s interval, a 15 s per-request timeout, and a 5 min
+  overall deadline; explicit cancellation aborts the loop without reporting
+  an error. Dismissing the browser early does not cancel the flow — the poll
+  endpoint is the source of truth.
+- The app does **not** implement MFA itself and does not use `@nextcloud/auth`
+  (that package only handles CSRF/guest tokens for web embeds).
+
+Security notes:
+
+- The only secret stored is the `appPassword` (an app-specific password
+  issued by the server during Login Flow v2), together with `serverUrl` and
+  `loginName`, in `expo-secure-store` (device keychain). Keys are namespaced
+  `my.nctasks.v1.*`; nothing outside that key set is ever read or written.
+- Credentials are never written to the filesystem, SQLite, or logs.
+- Logout deletes exactly the owned key set; unrelated SecureStore/Keychain
+  entries of other apps are untouched.
+
 ## Data safety principles
 
 - iCalendar `VTODO` data round-trips must preserve UIDs, unknown properties,

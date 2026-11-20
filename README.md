@@ -6,7 +6,8 @@ An open-source, **offline-first iOS task app for Nextcloud**, with an interactio
 model inspired by Apple Reminders. Tasks and lists are stored on your Nextcloud
 server using **CalDAV / iCalendar `VTODO`** — no custom backend, no data silo.
 
-> **Status:** Phase 0 (bootstrap, tooling, CI, Hello World) in progress.
+> **Status:** Phase 1 (Nextcloud authentication, discovery, lists, sharing)
+> in progress; Phase 0 complete.
 > See [docs/roadmap.md](docs/roadmap.md) for the current, truthful status of
 > every planned feature.
 
