@@ -87,9 +87,13 @@ non-zero when a required check fails.
 
 ### Phase 0.5 gate: verifying the Hello World app
 
-The current app is the Phase 0.5 Hello World screen (issue #4): a greeting
-plus one button with a press counter. To pass the Phase 0 gate, verify on
-the physical iPhone that:
+**Gate passed on 2026-11-20** — the user verified the Hello World app on a
+physical iPhone via Expo Go (greeting visible, counter increments, Fast
+Refresh works). The steps below are kept for the record and for future
+fresh-install sanity checks.
+
+The Phase 0.5 screen is the Hello World screen (issue #4): a greeting plus
+one button with a press counter. On a physical iPhone, verify that:
 
 1. The screen shows **"Hello from my-nc-tasks"** and "Not pressed yet".
 2. Tapping **"Tap to increment"** increments the counter
