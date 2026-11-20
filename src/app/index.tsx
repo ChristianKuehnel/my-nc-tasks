@@ -1,88 +1,52 @@
-import { useReducer } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
-import { helloReducer, initialHelloState } from '@/features/hello/hello-reducer';
+import { AuthenticatedScreen } from '@/features/auth/authenticated-screen';
+import { LoginScreen } from '@/features/auth/login-screen';
+import { useAuth } from '@/features/auth/use-auth';
 
 /**
- * Phase 0.5 Hello World screen (issue #4).
+ * App root (Phase 1.1): an auth gate.
  *
- * A single screen with one interactive control: tapping the button
- * increments a counter. Proves JS -> native interaction and Fast Refresh
- * on a physical iPhone via Expo Go.
+ * - `restoring`            -> brief loading state (SecureStore read)
+ * - `unauthenticated`      -> login screen (server URL entry)
+ * - `authenticating`       -> login screen in waiting state (browser login + polling)
+ * - `authenticated`        -> connected view (server/user, logout)
  */
-export default function HomeScreen() {
-  const [state, dispatch] = useReducer(helloReducer, initialHelloState);
+export default function RootScreen() {
+  const auth = useAuth();
+
+  if (auth.status === 'restoring') {
+    return (
+      <View style={styles.loading} accessibilityLiveRegion="polite">
+        <ActivityIndicator size="large" />
+        <Text style={styles.loadingText}>Loading…</Text>
+      </View>
+    );
+  }
+
+  if (auth.status === 'authenticated' && auth.session) {
+    return <AuthenticatedScreen session={auth.session} onLogout={() => void auth.logout()} />;
+  }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.content}>
-        <Text style={styles.title} accessibilityRole="header">
-          Hello from my-nc-tasks
-        </Text>
-        <Text style={styles.subtitle}>Offline-first task app for Nextcloud</Text>
-        <Text style={styles.counter} accessibilityLiveRegion="polite">
-          {counterLabel(state.count)}
-        </Text>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Increment counter"
-          style={({ pressed }) => [styles.button, pressed ? styles.buttonPressed : null]}
-          onPress={() => dispatch({ type: 'increment' })}
-        >
-          <Text style={styles.buttonText}>Tap to increment</Text>
-        </Pressable>
-      </View>
-    </SafeAreaView>
+    <LoginScreen
+      status={auth.status === 'authenticating' ? 'authenticating' : 'unauthenticated'}
+      error={auth.error}
+      onLogin={(serverUrlInput) => void auth.login(serverUrlInput)}
+      onCancel={auth.cancel}
+    />
   );
 }
 
-function counterLabel(count: number): string {
-  if (count === 0) {
-    return 'Not pressed yet';
-  }
-  return `Pressed ${count} ${count === 1 ? 'time' : 'times'}`;
-}
-
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  content: {
+  loading: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 12,
-    padding: 24,
   },
-  title: {
-    fontSize: 28,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  subtitle: {
+  loadingText: {
     fontSize: 16,
     color: '#555',
-    textAlign: 'center',
-  },
-  counter: {
-    marginTop: 16,
-    fontSize: 20,
-    fontWeight: '600',
-  },
-  button: {
-    marginTop: 8,
-    backgroundColor: '#111827',
-    borderRadius: 12,
-    paddingHorizontal: 24,
-    paddingVertical: 14,
-  },
-  buttonPressed: {
-    opacity: 0.7,
-  },
-  buttonText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600',
   },
 });
