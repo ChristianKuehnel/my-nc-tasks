@@ -86,6 +86,15 @@ export function textList(value: unknown): string[] {
     .filter((entry): entry is string => entry !== null);
 }
 
+/** Escape a string for inclusion as XML character data. */
+export function escapeXmlText(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
 /**
  * Parse a `DAV:multistatus` document into response entries with a flattened
  * property map. Properties from all `propstat` blocks are merged; a 404

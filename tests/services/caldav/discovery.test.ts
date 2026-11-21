@@ -18,7 +18,14 @@ function res(status: number, body = '', headers: Record<string, string> = {}): R
   return {
     ok: status >= 200 && status < 300,
     status,
-    headers: { get: (name: string) => headers[name] ?? null },
+    headers: {
+      get: (name: string) => headers[name] ?? null,
+      forEach: (cb: (value: string, key: string) => void) => {
+        for (const [key, value] of Object.entries(headers)) {
+          cb(value, key);
+        }
+      },
+    },
     text: async () => body,
   } as unknown as Response;
 }
