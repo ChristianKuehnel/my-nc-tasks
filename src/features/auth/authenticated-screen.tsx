@@ -26,6 +26,15 @@ export function AuthenticatedScreen({ session, onLogout }: AuthenticatedScreenPr
           <Text style={styles.userLabel}>User</Text>
           <Text style={styles.userValue}>{session.loginName}</Text>
         </View>
+        <Link href="/lists">
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Open task lists"
+            style={({ pressed }) => [styles.listsButton, pressed ? styles.buttonPressed : null]}
+          >
+            <Text style={styles.listsText}>Task lists</Text>
+          </Pressable>
+        </Link>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Log out"
@@ -90,6 +99,17 @@ const styles = StyleSheet.create({
   userValue: {
     fontSize: 16,
     fontWeight: '600',
+  },
+  listsButton: {
+    borderRadius: 12,
+    backgroundColor: '#2563eb',
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+  },
+  listsText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#ffffff',
   },
   logoutButton: {
     marginTop: 8,
