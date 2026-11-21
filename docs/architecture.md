@@ -14,15 +14,16 @@ versions or layering decisions change.
 
 ## Technology stack (pinned)
 
-| Component    | Version              | Pin location                                    | Notes                                                                                                     |
-| ------------ | -------------------- | ----------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| Expo SDK     | ~58.0.26             | `package.json`                                  | RN 0.88, React 19.3                                                                                       |
-| React Native | 0.88.1               | `package.json`                                  |                                                                                                           |
-| React        | 19.3.0               | `package.json`                                  |                                                                                                           |
-| Node.js      | 22.23.5              | `.node-version`, `.mise.toml`                   | Latest 22.x (LTS); Expo requires >=22.13 on the 22 line; some tooling (lint-staged 17) requires >=22.22.1 |
-| pnpm         | 12.21.0              | `package.json` (`packageManager`), `.mise.toml` | via Corepack or mise                                                                                      |
-| TypeScript   | ~6.0.3               | `package.json`                                  | strict mode                                                                                               |
-| Router       | expo-router ~58.0.32 | `package.json`                                  | file-based routing under `src/app`                                                                        |
+| Component    | Version               | Pin location                                    | Notes                                                                                                                                                                            |
+| ------------ | --------------------- | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Expo SDK     | ~58.0.26              | `package.json`                                  | RN 0.88, React 19.3                                                                                                                                                              |
+| React Native | 0.88.1                | `package.json`                                  |                                                                                                                                                                                  |
+| React        | 19.3.0                | `package.json`                                  |                                                                                                                                                                                  |
+| Node.js      | 22.23.5               | `.node-version`, `.mise.toml`                   | Latest 22.x (LTS); Expo requires >=22.13 on the 22 line; some tooling (lint-staged 17) requires >=22.22.1                                                                        |
+| pnpm         | 12.21.0               | `package.json` (`packageManager`), `.mise.toml` | via Corepack or mise                                                                                                                                                             |
+| TypeScript   | ~6.0.3                | `package.json`                                  | strict mode                                                                                                                                                                      |
+| Router       | expo-router ~58.0.32  | `package.json`                                  | file-based routing under `src/app`                                                                                                                                               |
+| XML parser   | fast-xml-parser 4.5.7 | `package.json`                                  | v4 pinned on purpose: CJS build with bundled types, single dependency (`strnum`) — compatible with Metro/Hermes; v5 is an ESM Nodable rewrite that is not a safe fit for Expo Go |
 
 ### Why Expo SDK 58
 
@@ -126,6 +127,43 @@ Security notes:
 - Credentials are never written to the filesystem, SQLite, or logs.
 - Logout deletes exactly the owned key set; unrelated SecureStore/Keychain
   entries of other apps are untouched.
+
+## CalDAV discovery
+
+Discovery of task-list calendars (Phase 1.2, issue #15) lives in
+`src/services/caldav` — pure TypeScript, no React or SQLite.
+
+Flow (per authenticated session, RFC 6764 + RFC 4791):
+
+1. **Locate the principal** — `PROPFIND {server}/.well-known/carddav/`
+   with bounded redirect following; the Nextcloud 302 points directly at
+   the user principal. If the `.well-known` resource is unavailable, fall
+   back to `PROPFIND {server}/remote.php/dav/` (the DAV collection root),
+   which reports `DAV:current-user-principal` session-based.
+2. **Calendar home set** — from `C:calendar-home-set` in the probing
+   response, or a follow-up `PROPFIND` on the principal.
+3. **List calendars** — `PROPFIND` on the home set with `Depth: 1`;
+   each calendar yields display name, supported components
+   (`VTODO` => task list), owner, `calendar-user-address-set`, and the
+   current user's `DAV:current-user-privilege-set` (read / read-write).
+
+Implementation notes:
+
+- `http.ts` — DAV request plumbing: RFC 7617 basic auth from the Login
+  Flow v2 app password, per-request timeout, and explicit bounded
+  redirect following (a 3xx in non-follow mode is a `server_error`,
+  since a redirected PROPFIND would change semantics).
+- `xml.ts` — namespace-tolerant multistatus parsing. Prefixes are
+  stripped (`removeNSPrefix`), so `D:`/`d:`/default-namespace documents
+  all parse identically. SabreDAV quirks are handled: `DAV:cur/@uri`
+  attribute wrappers and `privilege-uri` child elements.
+- `discovery.ts` — the three-step flow; results are absolute URLs with
+  canonical trailing slashes.
+- Error surface: `CalDAVError` with stable codes — `network`, `timeout`,
+  `unauthorized`, `forbidden`, `not_found`, `server_error` — so the UI
+  layer (later phases) can map them to user-facing messages.
+- `fetch`, timeout and redirect bounds are injectable; all tests run
+  against XML fixtures without a live server or timers.
 
 ## Data safety principles
 

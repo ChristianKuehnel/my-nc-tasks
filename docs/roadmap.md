@@ -45,8 +45,8 @@ Phase 1 may proceed.
 
 | Item | Description                                                                 | Status      |
 | ---- | --------------------------------------------------------------------------- | ----------- |
-| 1.1  | Nextcloud Login Flow v2 (browser login, polling, SecureStore sessions, MFA) | in progress |
-| 1.2  | CalDAV discovery (principals, calendar home, VTODO calendars, permissions)  | planned     |
+| 1.1  | Nextcloud Login Flow v2 (browser login, polling, SecureStore sessions, MFA) | done        |
+| 1.2  | CalDAV discovery (principals, calendar home, VTODO calendars, permissions)  | in progress |
 | 1.3  | List browsing and create (owned + shared, empty/loading/error states)       | planned     |
 | 1.4  | Rename / delete / unsubscribe (safe, permission-aware)                      | planned     |
 | 1.5  | List sharing (Nextcloud DAV sharing extensions, capability detection)       | planned     |
