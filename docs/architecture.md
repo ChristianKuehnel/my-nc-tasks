@@ -165,6 +165,31 @@ Implementation notes:
 - `fetch`, timeout and redirect bounds are injectable; all tests run
   against XML fixtures without a live server or timers.
 
+## List browsing and create (task lists)
+
+The lists feature (Phase 1.3, issue #16) is the first UI feature built on
+top of the CalDAV client. It reads the calendars already discovered in
+Phase 1.2, splits them into **owned** and **shared** lists, and lets the
+user **create** a new task list.
+
+- `src/features/lists/use-lists.ts` — `useLists(session)`. A small
+  state machine (`loading` / `ready` / `error`) that wraps
+  `discoverCalendars` for the initial load and `refresh`, and
+  `createCalendar` for creation. After a create it **re-discovers**
+  rather than assuming a server-side name or ordering, so the rendered
+  state always matches the server. A stale guard prevents an in-flight
+  load from clobbering a newer one.
+- `src/features/lists/lists-screen.tsx` — presentational screen: owned /
+  shared sections, empty / loading / error states, and a create dialog.
+  Shared lists are read-only here (mutations land in Phase 1.4).
+- `src/app/lists.tsx` — the Expo Router route, auth-gated.
+- `src/services/caldav/collections.ts` — `createCalendar` issues an
+  RFC 4791 `MKCALENDAR` against the calendar home set and reads the new
+  calendar URL from the `Location` header (no guessed URLs).
+
+Non-goals: rename / delete / unsubscribe (Phase 1.4) and list sharing
+(Phase 1.5).
+
 ## Data safety principles
 
 - iCalendar `VTODO` data round-trips must preserve UIDs, unknown properties,

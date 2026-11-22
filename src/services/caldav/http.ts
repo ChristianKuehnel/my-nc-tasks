@@ -10,7 +10,13 @@
 import type { CalDAVCredentials } from './types';
 
 export type CalDAVErrorCode =
-  'network' | 'timeout' | 'unauthorized' | 'forbidden' | 'not_found' | 'server_error';
+  | 'network'
+  | 'timeout'
+  | 'bad_request'
+  | 'unauthorized'
+  | 'forbidden'
+  | 'not_found'
+  | 'server_error';
 
 export class CalDAVError extends Error {
   readonly code: CalDAVErrorCode;
@@ -51,10 +57,14 @@ interface WebDAVRequestResult {
   /** Final URL after redirect following (the request URL when none). */
   finalUrl: string;
   body: string;
+  /** Response headers with lowercase names. */
+  headers: Record<string, string>;
 }
 
 function mapHttpError(status: number): CalDAVError {
   switch (status) {
+    case 400:
+      return new CalDAVError('bad_request', 'The server rejected the request (HTTP 400).');
     case 401:
       return new CalDAVError('unauthorized', 'The server rejected the credentials (HTTP 401).');
     case 403:
@@ -141,10 +151,24 @@ export async function webdavRequest(options: WebDAVRequestOptions): Promise<WebD
     if (!response.ok) {
       throw mapHttpError(response.status);
     }
-    return { status: response.status, finalUrl: url, body };
+    return {
+      status: response.status,
+      finalUrl: url,
+      body,
+      headers: collectHeaders(response.headers),
+    };
   }
 
   throw new CalDAVError('server_error', 'Too many redirects while discovering the server.');
+}
+
+/** Normalize a fetch `Headers` object into lowercase-named plain records. */
+function collectHeaders(headers: Headers): Record<string, string> {
+  const out: Record<string, string> = {};
+  headers.forEach?.((value: string, key: string) => {
+    out[key.toLowerCase()] = value;
+  });
+  return out;
 }
 
 function describeNetworkError(err: unknown): string {
