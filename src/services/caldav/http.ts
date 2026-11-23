@@ -104,9 +104,17 @@ export async function webdavRequest(options: WebDAVRequestOptions): Promise<WebD
   const fetchImpl = options.fetchImpl ?? globalThis.fetch;
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const follow = options.followRedirects ?? false;
+  const server = new URL(options.credentials.serverUrl);
 
   let url = options.url;
   for (let hop = 0; hop <= MAX_REDIRECTS; hop += 1) {
+    const requestUrl = new URL(url);
+    if (requestUrl.origin !== server.origin || requestUrl.username || requestUrl.password) {
+      throw new CalDAVError(
+        'server_error',
+        'DAV requests must stay on the configured server origin.',
+      );
+    }
     const headers: Record<string, string> = {
       Authorization: basicAuthHeader(options.credentials),
     };
@@ -124,6 +132,7 @@ export async function webdavRequest(options: WebDAVRequestOptions): Promise<WebD
         url,
         {
           method: options.method,
+          redirect: 'manual',
           headers,
           body: options.body,
         },
@@ -143,7 +152,20 @@ export async function webdavRequest(options: WebDAVRequestOptions): Promise<WebD
       if (!location) {
         throw new CalDAVError('server_error', 'Redirect response without a Location header.');
       }
-      url = new URL(location, url).toString();
+      const target = new URL(location, url);
+      // Some servers (observed: Apache + Nextcloud) redirect
+      // /.well-known/carddav to an http:// URL even when the site is served
+      // over https. Following that verbatim would send basic-auth
+      // credentials in cleartext, so re-upgrade same-host targets to https
+      // when the original request used https.
+      if (
+        target.protocol === 'http:' &&
+        server.protocol === 'https:' &&
+        target.host === server.host
+      ) {
+        target.protocol = 'https:';
+      }
+      url = target.toString();
       continue;
     }
 

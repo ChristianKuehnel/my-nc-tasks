@@ -20,7 +20,7 @@ const parser = new XMLParser({
   cdataPropName: '__cdata',
 });
 
-const ATTR_PREFIX = '@_';
+export const ATTR_PREFIX = '@_';
 
 /** Read a flat `@_<name>` attribute (fast-xml-parser stores attributes
  * inline with the configured prefix, not nested under a parent key). */

@@ -136,12 +136,19 @@ Discovery of task-list calendars (Phase 1.2, issue #15) lives in
 Flow (per authenticated session, RFC 6764 + RFC 4791):
 
 1. **Locate the principal** — `PROPFIND {server}/.well-known/carddav/`
-   with bounded redirect following; the Nextcloud 302 points directly at
-   the user principal. If the `.well-known` resource is unavailable, fall
-   back to `PROPFIND {server}/remote.php/dav/` (the DAV collection root),
-   which reports `DAV:current-user-principal` session-based.
-2. **Calendar home set** — from `C:calendar-home-set` in the probing
-   response, or a follow-up `PROPFIND` on the principal.
+   with bounded redirect following. If the `.well-known` resource is
+   unavailable, fall back to `PROPFIND {server}/remote.php/dav/` (the DAV
+   collection root), which reports `DAV:current-user-principal`
+   session-based. The reported `current-user-principal` is a relative DAV
+   href, an absolute URL, or a Nextcloud `principal://` URI (mapped onto
+   the DAV root). Before sending credentials the client checks that the
+   destination is on the configured origin. Same-host redirects from
+   HTTPS to HTTP are rewritten to HTTPS before that check.
+2. **Calendar home set** — from `calendar-home-set` in the probing
+   response, or a follow-up `PROPFIND` on the principal. Some deployments
+   report no `calendar-home-set` at all; for those the Nextcloud home set
+   (`calendars/{uid}/`) is derived from the principal
+   (`principals/users/{uid}/`) and verified via its `DAV:owner` before use.
 3. **List calendars** — `PROPFIND` on the home set with `Depth: 1`;
    each calendar yields display name, supported components
    (`VTODO` => task list), owner, `calendar-user-address-set`, and the
@@ -149,6 +156,11 @@ Flow (per authenticated session, RFC 6764 + RFC 4791):
 
 Implementation notes:
 
+- CalDAV properties are sent in the RFC 4791 namespace
+  (`urn:ietf:params:xml:ns:caldav`). Newer SabreDAV/Nextcloud servers do
+  not map the legacy Apple `http://calendarserver.org/ns/` namespace (they
+  answer `404` for PROPFIND properties and `400` for MKCALENDAR), so the
+  RFC namespace is required.
 - `http.ts` — DAV request plumbing: RFC 7617 basic auth from the Login
   Flow v2 app password, per-request timeout, and explicit bounded
   redirect following (a 3xx in non-follow mode is a `server_error`,
@@ -157,13 +169,17 @@ Implementation notes:
   stripped (`removeNSPrefix`), so `D:`/`d:`/default-namespace documents
   all parse identically. SabreDAV quirks are handled: `DAV:cur/@uri`
   attribute wrappers and `privilege-uri` child elements.
+- Privileges are parsed from RFC 3744 child elements (`<write/>`,
+  `<read-free-busy/>`) as sent by Nextcloud. The client also accepts the
+  previously supported `privilege-uri` representation.
 - `discovery.ts` — the three-step flow; results are absolute URLs with
   canonical trailing slashes.
 - Error surface: `CalDAVError` with stable codes — `network`, `timeout`,
-  `unauthorized`, `forbidden`, `not_found`, `server_error` — so the UI
-  layer (later phases) can map them to user-facing messages.
-- `fetch`, timeout and redirect bounds are injectable; all tests run
-  against XML fixtures without a live server or timers.
+  `bad_request`, `unauthorized`, `forbidden`, `not_found`, `server_error`
+  — so the UI layer (later phases) can map them to user-facing messages.
+- Unit tests use XML fixtures without a live server. A gated
+  integration suite exercises the same service modules over HTTPS; see
+  [the development guide](development.md#live-caldav-checks).
 
 ## List browsing and create (task lists)
 
@@ -184,8 +200,12 @@ user **create** a new task list.
   Shared lists are read-only here (mutations land in Phase 1.4).
 - `src/app/lists.tsx` — the Expo Router route, auth-gated.
 - `src/services/caldav/collections.ts` — `createCalendar` issues an
-  RFC 4791 `MKCALENDAR` against the calendar home set and reads the new
-  calendar URL from the `Location` header (no guessed URLs).
+  RFC 4791 `MKCALENDAR`. Per the RFC the request targets the URL of the
+  calendar to be created (`{homeSet}{slug}/`), derived from a
+  lowercased, URL-safe slug of the display name — not the home set
+  itself (SabreDAV answers `405` when targeted at the home set). On
+  success the requested URL is authoritative; a `Location` header, when
+  the server sends one, wins (Nextcloud/SabreDAV sends none).
 
 Non-goals: rename / delete / unsubscribe (Phase 1.4) and list sharing
 (Phase 1.5).
@@ -196,7 +216,8 @@ Non-goals: rename / delete / unsubscribe (Phase 1.4) and list sharing
   and recurrence rules. Loss of user data is a defect, not a limitation.
 - Credentials live in `expo-secure-store` (device keychain) only.
 - No telemetry by default; HTTPS for all production traffic.
-- Real-server integration tests are non-destructive and separately gated.
+- Real-server integration tests are read-only by default. The optional
+  create check is for a dedicated test account and never deletes data.
 
 ## Known constraints
 

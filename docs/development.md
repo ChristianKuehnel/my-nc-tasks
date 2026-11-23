@@ -129,6 +129,27 @@ pnpm check           # the whole gate in one command
 A noninteractive equivalent of the pre-commit hook (for agents and CI):
 run `pnpm format && pnpm check` before committing/pushing.
 
+## Live CalDAV checks
+
+Use a dedicated HTTPS Nextcloud test account. Keep `NC_TEST_URL`,
+`NC_TEST_USER`, and `NC_TEST_PASSWORD` (an app password) in a local,
+gitignored `.env.nc-test`. Do not print or commit the values.
+
+```sh
+(
+  set -a
+  . ./.env.nc-test
+  set +a
+  NC_TEST_CREATE=0 pnpm exec jest tests/integration --runInBand
+)
+```
+
+This checks discovery without writing data; the suite skips without
+credentials. Only on a dedicated test account, change `NC_TEST_CREATE`
+to `1` to also create and rediscover one empty list named `CalDAV check Ü & …`.
+This check leaves the list in place. Inspect the test account manually
+afterward; an HTTP `204` alone did not confirm removal on the test server.
+
 ## Continuous integration
 
 GitHub Actions (`.github/workflows/ci.yml`) runs on every push to `main`
