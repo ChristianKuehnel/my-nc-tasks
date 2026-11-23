@@ -106,6 +106,14 @@ one button with a press counter. On a physical iPhone, verify that:
 > **Gate note (Phase 0.5):** this human verification on a physical iPhone is
 > mandatory. An automated test is not a substitute.
 
+### Phase 1.3: verifying task-list navigation
+
+In Expo Go, sign in on the dedicated test account and tap **Task lists**
+on the **Connected** screen. The app should open the task-list screen even
+if discovery is still loading, finds no lists, or reports an error.
+Once the lists load, create a uniquely named test list and confirm it
+appears without leaving the screen.
+
 ### On the simulator (macOS only)
 
 Not part of the standard workflow (Linux-only development is the goal), but

@@ -11,7 +11,7 @@ interface AuthenticatedScreenProps {
 
 /**
  * Shown after a successful Login Flow v2: which server/user the app is
- * connected to, logout, and a link back to the Phase 0.5 Hello World screen.
+ * connected to, logout, and links to Task lists and the Hello World screen.
  */
 export function AuthenticatedScreen({ session, onLogout }: AuthenticatedScreenProps) {
   return (
@@ -26,9 +26,8 @@ export function AuthenticatedScreen({ session, onLogout }: AuthenticatedScreenPr
           <Text style={styles.userLabel}>User</Text>
           <Text style={styles.userValue}>{session.loginName}</Text>
         </View>
-        <Link href="/lists">
+        <Link href="/lists" asChild>
           <Pressable
-            accessibilityRole="button"
             accessibilityLabel="Open task lists"
             style={({ pressed }) => [styles.listsButton, pressed ? styles.buttonPressed : null]}
           >
@@ -43,9 +42,8 @@ export function AuthenticatedScreen({ session, onLogout }: AuthenticatedScreenPr
         >
           <Text style={styles.logoutText}>Log out</Text>
         </Pressable>
-        <Link href="/hello">
+        <Link href="/hello" asChild>
           <Pressable
-            accessibilityRole="button"
             accessibilityLabel="Open Hello World screen"
             style={({ pressed }) => [styles.linkButton, pressed ? styles.buttonPressed : null]}
           >
