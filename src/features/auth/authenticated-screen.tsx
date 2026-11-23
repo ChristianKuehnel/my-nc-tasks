@@ -11,7 +11,7 @@ interface AuthenticatedScreenProps {
 
 /**
  * Shown after a successful Login Flow v2: which server/user the app is
- * connected to, logout, and a link back to the Phase 0.5 Hello World screen.
+ * connected to, a link to Task lists, and logout.
  */
 export function AuthenticatedScreen({ session, onLogout }: AuthenticatedScreenProps) {
   return (
@@ -26,12 +26,8 @@ export function AuthenticatedScreen({ session, onLogout }: AuthenticatedScreenPr
           <Text style={styles.userLabel}>User</Text>
           <Text style={styles.userValue}>{session.loginName}</Text>
         </View>
-        <Link href="/lists">
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Open task lists"
-            style={({ pressed }) => [styles.listsButton, pressed ? styles.buttonPressed : null]}
-          >
+        <Link href="/lists" asChild>
+          <Pressable accessibilityLabel="Open task lists" style={styles.listsButton}>
             <Text style={styles.listsText}>Task lists</Text>
           </Pressable>
         </Link>
@@ -43,15 +39,6 @@ export function AuthenticatedScreen({ session, onLogout }: AuthenticatedScreenPr
         >
           <Text style={styles.logoutText}>Log out</Text>
         </Pressable>
-        <Link href="/hello">
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Open Hello World screen"
-            style={({ pressed }) => [styles.linkButton, pressed ? styles.buttonPressed : null]}
-          >
-            <Text style={styles.linkText}>Hello World (Phase 0)</Text>
-          </Pressable>
-        </Link>
       </View>
     </SafeAreaView>
   );
@@ -119,20 +106,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingVertical: 14,
   },
-  linkButton: {
-    borderRadius: 12,
-    paddingHorizontal: 24,
-    paddingVertical: 14,
-  },
   buttonPressed: {
     opacity: 0.7,
   },
   logoutText: {
     fontSize: 16,
     fontWeight: '600',
-  },
-  linkText: {
-    fontSize: 14,
-    color: '#2563eb',
   },
 });
