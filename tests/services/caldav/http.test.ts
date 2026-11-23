@@ -123,6 +123,31 @@ describe('webdavRequest', () => {
     expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
 
+  it('re-upgrades a same-host http redirect target to https', async () => {
+    const fetchImpl: FetchLike = jest.fn(async (url: string) => {
+      if (url === 'https://cloud.example.com/.well-known/carddav/') {
+        // Mirrors Apache + Nextcloud: 301 to a cleartext URL on the same host.
+        return jsonResponse('', 301, {
+          Location: 'http://cloud.example.com/remote.php/dav/',
+        });
+      }
+      return jsonResponse('<ok/>', 207);
+    });
+    const result = await webdavRequest({
+      credentials: CREDENTIALS,
+      method: 'PROPFIND',
+      url: 'https://cloud.example.com/.well-known/carddav/',
+      followRedirects: true,
+      fetchImpl,
+    });
+    expect(result.finalUrl).toBe('https://cloud.example.com/remote.php/dav/');
+    expect(fetchImpl).toHaveBeenNthCalledWith(
+      2,
+      'https://cloud.example.com/remote.php/dav/',
+      expect.anything(),
+    );
+  });
+
   it('fails a redirect loop after too many hops', async () => {
     const fetchImpl: FetchLike = jest.fn(async (url: string) =>
       jsonResponse('', 302, { Location: url }),
@@ -137,6 +162,28 @@ describe('webdavRequest', () => {
       }),
     ).rejects.toMatchObject({ code: 'server_error' });
     expect(fetchImpl).toHaveBeenCalledTimes(6); // initial + 5 hops
+  });
+
+  it('does not send credentials to a different origin', async () => {
+    const fetchImpl: FetchLike = jest.fn(async () =>
+      jsonResponse('', 301, { Location: 'https://other.example.com/dav/' }),
+    );
+    await expect(
+      webdavRequest({
+        credentials: CREDENTIALS,
+        method: 'PROPFIND',
+        url: 'https://cloud.example.com/.well-known/carddav/',
+        followRedirects: true,
+        fetchImpl,
+      }),
+    ).rejects.toMatchObject({ code: 'server_error' });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(fetchImpl).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        redirect: 'manual',
+      }),
+    );
   });
 
   it('rejects an unexpected redirect when not in follow mode', async () => {

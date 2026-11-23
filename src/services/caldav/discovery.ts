@@ -13,6 +13,9 @@
  *         Native's fetch follows it transparently and exposes no Location).
  *   2. Obtain the `calendar-home-set` (from the same response, or with a
  *      PROPFIND on the principal if the root probe did not report it).
+ *      Some deployments report no `calendar-home-set` at all; for those,
+ *      the Nextcloud home set (`calendars/{uid}/`) is derived from the
+ *      principal (`principals/users/{uid}/`) and verified via its owner.
  *   3. PROPFIND the home set with Depth: 1 -> all calendars with display
  *      name, supported components (VTODO detection), owner, sharing
  *      addresses and the current user's privilege set (read / read-write).
@@ -23,7 +26,7 @@
 
 import { CalDAVError, webdavRequest } from './http';
 import type { CalDAVCalendar, CalDAVCredentials, DiscoveredCalendars } from './types';
-import { firstText, parseMultistatus, textList } from './xml';
+import { ATTR_PREFIX, firstText, parseMultistatus, textList } from './xml';
 
 export interface DiscoveryDeps {
   fetchImpl?: Parameters<typeof webdavRequest>[0]['fetchImpl'];
@@ -33,8 +36,14 @@ export interface DiscoveryDeps {
 const WELL_KNOWN_PATH = '/.well-known/carddav/';
 const DAV_ROOT_PATH = '/remote.php/dav/';
 
+/**
+ * CalDAV properties use the RFC 4791 namespace
+ * (`urn:ietf:params:xml:ns:caldav`). Newer SabreDAV/Nextcloud servers do
+ * not map the legacy Apple `http://calendarserver.org/ns/` namespace and
+ * answer `404 Not Found` for it, so the RFC namespace is required.
+ */
 const PRINCIPAL_PROPFIND = `<?xml version="1.0" encoding="UTF-8"?>
-<D:propfind xmlns:D="DAV:" xmlns:C="http://calendarserver.org/ns/">
+<D:propfind xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
   <D:prop>
     <D:current-user-principal />
     <C:calendar-home-set />
@@ -42,7 +51,7 @@ const PRINCIPAL_PROPFIND = `<?xml version="1.0" encoding="UTF-8"?>
 </D:propfind>`;
 
 const HOME_SET_PROPFIND = `<?xml version="1.0" encoding="UTF-8"?>
-<D:propfind xmlns:D="DAV:" xmlns:C="http://calendarserver.org/ns/">
+<D:propfind xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
   <D:prop>
     <D:displayname />
     <D:owner />
@@ -52,12 +61,22 @@ const HOME_SET_PROPFIND = `<?xml version="1.0" encoding="UTF-8"?>
   </D:prop>
 </D:propfind>`;
 
+/** Minimal PROPFIND used to verify a derived calendar home set. */
+const OWNER_PROPFIND = `<?xml version="1.0" encoding="UTF-8"?>
+<D:propfind xmlns:D="DAV:">
+  <D:prop>
+    <D:owner />
+  </D:prop>
+</D:propfind>`;
+
 /** Normalize a DAV href for comparison: absolute, trailing slash canonical. */
 function canonicalUrl(href: string, base: string): string {
   const url = new URL(href, base);
   if (url.pathname.length > 1 && !url.pathname.endsWith('/')) {
     url.pathname += '/';
   }
+  // Nextcloud may return lowercase percent-escapes for Unicode path segments.
+  url.pathname = url.pathname.replace(/%[0-9a-f]{2}/gi, (escape) => escape.toUpperCase());
   return url.toString();
 }
 
@@ -69,19 +88,60 @@ interface PrincipalProbe {
   homeSetUrl: string | null;
 }
 
-function parsePrincipalProbe(
-  body: string,
-  base: string,
-  expectedPrincipalHref?: string,
-): PrincipalProbe {
+/**
+ * Turn a reported `current-user-principal` value into an HTTP(S)-requestable
+ * URL. Relative DAV hrefs (`/remote.php/dav/principals/users/alice/`) and
+ * absolute http(s) URLs are requestable as-is. Nextcloud `principal://`
+ * URIs are not requestable over HTTP(S); when `davRoot` is known they are
+ * mapped onto it (`{davRoot}principals/...`), otherwise `null`.
+ */
+function principalUrlFromHref(href: string, base: string, davRoot?: string): string | null {
+  if (/^https?:\/\//i.test(href) || href.startsWith('/')) {
+    return canonicalUrl(href, base);
+  }
+  if (href.toLowerCase().startsWith('principal://') && davRoot !== undefined) {
+    // The path after the '#' delimiter is relative to the DAV
+    // root (SabreDAV/Nextcloud: principal://host/#principals/users/alice
+    // maps onto {davRoot}principals/users/alice).
+    const match = /^principal:\/\/[^/]+\/?(.*)$/i.exec(href);
+    const path = (match?.[1] ?? '').replace(/^#/, '').split('/').filter(Boolean).join('/');
+    if (path === '') {
+      return null;
+    }
+    const root = canonicalUrl(davRoot, base).replace(/\/$/, '');
+    return canonicalUrl(`${root}/${path}`, base);
+  }
+  return null;
+}
+
+function parsePrincipalProbe(body: string, base: string, finalUrl?: string): PrincipalProbe {
   const [response] = parseMultistatus(body);
   const principalHref = firstText(response.properties['current-user-principal']);
   if (principalHref === null) {
     throw new CalDAVProtocolError('DAV response is missing current-user-principal');
   }
+
+  let principalUrl: string | null = null;
+  if (/^https?:\/\//i.test(principalHref) || principalHref.startsWith('/')) {
+    // Servers may report a relative DAV href or an absolute HTTP(S) URL;
+    // both are requestable and take precedence over the response URL.
+    principalUrl = principalUrlFromHref(principalHref, base);
+  } else if (finalUrl !== undefined) {
+    // The reported href is not requestable (e.g. `principal://`). When the
+    // response came from the principal collection itself, that URL is the
+    // principal; otherwise map the principal path onto the DAV root.
+    const pathname = new URL(finalUrl, base).pathname;
+    principalUrl = pathname.split('/').includes('principals')
+      ? canonicalUrl(finalUrl, base)
+      : principalUrlFromHref(principalHref, base, finalUrl);
+  }
+  if (principalUrl === null) {
+    throw new CalDAVProtocolError('The principal is not reachable over HTTP(S)');
+  }
+
   const homeHref = firstText(response.properties['calendar-home-set']);
   return {
-    principalUrl: canonicalUrl(expectedPrincipalHref ?? principalHref, base),
+    principalUrl,
     homeSetUrl: homeHref !== null ? canonicalUrl(homeHref, base) : null,
   };
 }
@@ -134,7 +194,66 @@ async function probeDavRoot(
     fetchImpl: deps.fetchImpl,
     timeoutMs: deps.timeoutMs,
   });
-  return parsePrincipalProbe(body, credentials.serverUrl);
+  // The root URL doubles as the DAV root for mapping `principal://` hrefs.
+  return parsePrincipalProbe(body, credentials.serverUrl, url);
+}
+
+/**
+ * Derive the Nextcloud calendar home set from the principal URL for
+ * servers that do not report `calendar-home-set` (observed on some
+ * Nextcloud deployments). Nextcloud maps the principal
+ * `principals/users/{uid}` to the home set `calendars/{uid}` under the
+ * same DAV root.
+ */
+function deriveHomeSetFromPrincipal(principalUrl: string): string | null {
+  try {
+    const parsed = new URL(principalUrl);
+    const segments = parsed.pathname.split('/').filter(Boolean);
+    const principalIdx = segments.length - 3;
+    if (
+      principalIdx < 1 ||
+      segments[principalIdx] !== 'principals' ||
+      segments[principalIdx + 1] !== 'users'
+    ) {
+      return null;
+    }
+    const uid = segments[principalIdx + 2];
+    if (uid === undefined || uid === '') {
+      return null;
+    }
+    const davRoot = `${parsed.origin}/${segments.slice(0, principalIdx).join('/')}/`;
+    return `${davRoot}calendars/${uid}/`;
+  } catch {
+    return null;
+  }
+}
+
+/** Verify that `candidate` reports the current principal as its owner. */
+async function verifyHomeSetOwnership(
+  credentials: CalDAVCredentials,
+  deps: DiscoveryDeps,
+  candidate: string,
+  principalUrl: string,
+): Promise<void> {
+  const { body } = await webdavRequest({
+    credentials,
+    method: 'PROPFIND',
+    url: candidate,
+    depth: '0',
+    body: OWNER_PROPFIND,
+    fetchImpl: deps.fetchImpl,
+    timeoutMs: deps.timeoutMs,
+  });
+  const [response] = parseMultistatus(body);
+  const ownerHref = firstText(response.properties.owner);
+  const expected = canonicalUrl(principalUrl, credentials.serverUrl);
+  if (
+    canonicalUrl(response.href, credentials.serverUrl) !== candidate ||
+    ownerHref === null ||
+    principalUrlFromHref(ownerHref, credentials.serverUrl) !== expected
+  ) {
+    throw new CalDAVProtocolError('The derived calendar home set is not owned by the current user');
+  }
 }
 
 /** Step 2: ensure we have a calendar home set URL. */
@@ -158,20 +277,20 @@ async function ensureHomeSet(
   });
   const [response] = parseMultistatus(body);
   const homeHref = firstText(response.properties['calendar-home-set']);
-  if (homeHref === null) {
+  if (homeHref !== null) {
+    return canonicalUrl(homeHref, credentials.serverUrl);
+  }
+
+  // Fallback for servers that do not report calendar-home-set: derive the
+  // Nextcloud home set from the principal and verify ownership before use.
+  const candidate = deriveHomeSetFromPrincipal(principalUrl);
+  if (candidate === null) {
     throw new CalDAVProtocolError('The principal does not report a calendar home set');
   }
-  return canonicalUrl(homeHref, credentials.serverUrl);
+  await verifyHomeSetOwnership(credentials, deps, candidate, principalUrl);
+  return candidate;
 }
 
-/**
- * Parse a `DAV:current-user-privilege-set` into the privilege short names.
- *
- * SabreDAV (Nextcloud) reports one `DAV:privilege` element per granted
- * privilege containing a `DAV:privilege-uri` such as `DAV:read` or
- * `urn:ietf:params:xml:ns:caldav:read-free-busy`; only the last path
- * segment (`read`, `read-free-busy`, ...) is kept.
- */
 /** Unwrap a repeating child element (`comp`, `addr`) of a DAV property,
  * returning the children as an array (single child -> one entry). */
 function childList(value: unknown, child: string): unknown[] {
@@ -184,6 +303,14 @@ function childList(value: unknown, child: string): unknown[] {
   }
   return Array.isArray(raw) ? raw : [raw];
 }
+
+/**
+ * Parse a `DAV:current-user-privilege-set` into the privilege short names.
+ *
+ * RFC 3744 represents the privilege as a child element (e.g. `<write/>`).
+ * Keep support for the previously accepted `privilege-uri` representation.
+ */
+const PRIVILEGE_META_KEYS = new Set(['privilege-uri', 'privilege-displayname']);
 
 function parsePrivileges(value: unknown): Set<string> {
   const privileges = new Set<string>();
@@ -207,13 +334,20 @@ function parsePrivileges(value: unknown): Set<string> {
     if (typeof entry !== 'object' || entry === null) {
       continue;
     }
-    const uri = firstText((entry as Record<string, unknown>)['privilege-uri']);
-    if (uri === null) {
-      continue;
+    const record = entry as Record<string, unknown>;
+    const uri = firstText(record['privilege-uri']);
+    if (uri !== null) {
+      const name = uri.split(':').pop() ?? '';
+      if (name !== '') {
+        privileges.add(name);
+      }
     }
-    const name = uri.split(':').pop() ?? '';
-    if (name !== '') {
-      privileges.add(name);
+    // Child-element flavor: `<privilege><write/></privilege>` -> "write".
+    for (const key of Object.keys(record)) {
+      if (key.startsWith(ATTR_PREFIX) || PRIVILEGE_META_KEYS.has(key)) {
+        continue;
+      }
+      privileges.add(key);
     }
   }
   return privileges;

@@ -209,4 +209,130 @@ describe('discoverCalendars', () => {
     expect(result.homeSetUrl).toBe(HOME);
     expect(fetchImpl).toHaveBeenCalledWith(PRINCIPAL, expect.anything());
   });
+
+  describe('server compatibility fallbacks', () => {
+    // Mirrors the behavior of newer SabreDAV/Nextcloud deployments:
+    // `current-user-principal` is a relative DAV href and neither the
+    // root nor the principal reports a `calendar-home-set`.
+    const REL_PRINCIPAL_HREF = '/remote.php/dav/principals/users/alice/';
+    const probeNoHomeSet = ms(
+      entry(
+        '/remote.php/dav/',
+        `<d:current-user-principal><d:href>${REL_PRINCIPAL_HREF}</d:href></d:current-user-principal>`,
+      ),
+    );
+
+    it('derives the home set from the principal when calendar-home-set is absent', async () => {
+      // HOME_LISTING_BODY doubles as the ownership-verification response
+      // (Depth: 0) and the listing (Depth: 1): its home-set entry carries
+      // the owner, and the listing filters that entry out.
+      const fetchImpl = router({
+        [WELL_KNOWN]: res(404),
+        [DAV_ROOT]: res(207, probeNoHomeSet),
+        [PRINCIPAL]: res(207, probeNoHomeSet),
+        [HOME]: res(207, HOME_LISTING_BODY),
+      });
+
+      const result = await discoverCalendars(CREDENTIALS, { fetchImpl });
+      expect(result.principalUrl).toBe(PRINCIPAL);
+      expect(result.homeSetUrl).toBe(HOME);
+      expect(result.calendars).toHaveLength(3);
+    });
+
+    it('rejects a derived home set that is not owned by the current user', async () => {
+      const foreignOwner = ms(
+        entry('/remote.php/dav/calendars/alice/', OWNER('/remote.php/dav/principals/users/eve/')),
+      );
+      const fetchImpl = router({
+        [WELL_KNOWN]: res(404),
+        [DAV_ROOT]: res(207, probeNoHomeSet),
+        [PRINCIPAL]: res(207, probeNoHomeSet),
+        [HOME]: res(207, foreignOwner),
+      });
+
+      await expect(discoverCalendars(CREDENTIALS, { fetchImpl })).rejects.toThrow(
+        /not owned by the current user/,
+      );
+    });
+
+    it('maps a principal:// URI from the root probe onto the DAV root', async () => {
+      const probePrincipalUri = ms(
+        entry(
+          '/remote.php/dav/',
+          `<d:current-user-principal><d:href>principal://cloud.example.com/#principals/users/alice</d:href></d:current-user-principal>`,
+        ),
+      );
+      const fetchImpl = router({
+        [WELL_KNOWN]: res(404),
+        [DAV_ROOT]: res(207, probePrincipalUri),
+        [PRINCIPAL]: res(207, PRINCIPAL_PROBE_BODY),
+        [HOME]: res(207, HOME_LISTING_BODY),
+      });
+
+      const result = await discoverCalendars(CREDENTIALS, { fetchImpl });
+      expect(result.principalUrl).toBe(PRINCIPAL);
+      expect(result.homeSetUrl).toBe(HOME);
+      expect(result.calendars).toHaveLength(3);
+    });
+
+    it('parses privileges in the child-element flavor (no privilege-uri)', async () => {
+      // Newer SabreDAV/Nextcloud: <privilege><write/></privilege> instead
+      // of <privilege><privilege-uri>DAV:write</privilege-uri></privilege>.
+      const childPriv = (names: string[]) =>
+        `<d:current-user-privilege-set>${names.map((n) => `<d:privilege><${n}/></d:privilege>`).join('')}</d:current-user-privilege-set>`;
+      const listing = ms(
+        entry('/remote.php/dav/calendars/alice/', OWNERED),
+        entry(
+          '/remote.php/dav/calendars/alice/%c3%bcbung/',
+          DISPLAY('Tasks') +
+            OWNERED +
+            childPriv(['read', 'write', 'write-content']) +
+            COMPS('VTODO'),
+        ),
+        entry(
+          '/remote.php/dav/calendars/bob/shared/',
+          DISPLAY("Bob's Tasks") +
+            OWNER('/remote.php/dav/principals/users/bob/') +
+            childPriv(['read', 'read-free-busy']) +
+            COMPS('VTODO'),
+        ),
+      );
+      const fetchImpl = router({
+        [WELL_KNOWN]: res(404),
+        [DAV_ROOT]: res(207, PRINCIPAL_PROBE_BODY),
+        [HOME]: res(207, listing),
+      });
+
+      const result = await discoverCalendars(CREDENTIALS, { fetchImpl });
+      const [tasks, shared] = result.calendars;
+      expect(tasks.url).toBe(`${HOME}%C3%BCbung/`);
+      expect(tasks.canRead).toBe(true);
+      expect(tasks.canWrite).toBe(true);
+      expect(shared.canRead).toBe(true);
+      expect(shared.canWrite).toBe(false);
+    });
+
+    it('sends CalDAV properties in the RFC 4791 namespace, not the legacy Apple one', async () => {
+      const bodies: string[] = [];
+      const fetchImpl: FetchLike = jest.fn(async (url: string, init?: RequestInit) => {
+        if (typeof init?.body === 'string') {
+          bodies.push(init.body);
+        }
+        if (url === WELL_KNOWN) {
+          return res(404);
+        }
+        if (url === DAV_ROOT) {
+          return res(207, PRINCIPAL_PROBE_BODY);
+        }
+        return res(207, HOME_LISTING_BODY);
+      });
+
+      await discoverCalendars(CREDENTIALS, { fetchImpl });
+      expect(bodies.length).toBeGreaterThanOrEqual(2);
+      for (const body of bodies) {
+        expect(body).not.toContain('calendarserver.org');
+      }
+      expect(bodies.some((body) => body.includes('urn:ietf:params:xml:ns:caldav'))).toBe(true);
+    });
+  });
 });
