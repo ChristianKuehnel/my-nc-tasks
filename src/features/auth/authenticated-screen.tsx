@@ -11,7 +11,7 @@ interface AuthenticatedScreenProps {
 
 /**
  * Shown after a successful Login Flow v2: which server/user the app is
- * connected to, logout, and links to Task lists and the Hello World screen.
+ * connected to, a link to Task lists, and logout.
  */
 export function AuthenticatedScreen({ session, onLogout }: AuthenticatedScreenProps) {
   return (
@@ -42,14 +42,6 @@ export function AuthenticatedScreen({ session, onLogout }: AuthenticatedScreenPr
         >
           <Text style={styles.logoutText}>Log out</Text>
         </Pressable>
-        <Link href="/hello" asChild>
-          <Pressable
-            accessibilityLabel="Open Hello World screen"
-            style={({ pressed }) => [styles.linkButton, pressed ? styles.buttonPressed : null]}
-          >
-            <Text style={styles.linkText}>Hello World (Phase 0)</Text>
-          </Pressable>
-        </Link>
       </View>
     </SafeAreaView>
   );
@@ -117,20 +109,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingVertical: 14,
   },
-  linkButton: {
-    borderRadius: 12,
-    paddingHorizontal: 24,
-    paddingVertical: 14,
-  },
   buttonPressed: {
     opacity: 0.7,
   },
   logoutText: {
     fontSize: 16,
     fontWeight: '600',
-  },
-  linkText: {
-    fontSize: 14,
-    color: '#2563eb',
   },
 });

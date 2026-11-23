@@ -71,6 +71,7 @@ describe('RootScreen (auth gate)', () => {
     expect(screen.getByText('Connected')).toBeDefined();
     expect(screen.getByText(SESSION.serverUrl)).toBeDefined();
     expect(screen.getByText(SESSION.loginName)).toBeDefined();
+    expect(screen.queryByText(/Hello World/)).toBeNull();
     await fireEvent.press(screen.getByLabelText('Log out'));
     expect(logout).toHaveBeenCalledTimes(1);
   });

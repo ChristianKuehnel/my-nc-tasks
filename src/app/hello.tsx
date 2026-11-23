@@ -10,7 +10,7 @@ import { helloReducer, initialHelloState } from '@/features/hello/hello-reducer'
  * A single screen with one interactive control: tapping the button
  * increments a counter. It was the root screen in Phase 0; since Phase 1.1
  * the root is the auth gate (see `src/app/index.tsx`) and this screen is
- * kept as a sub-route so the Phase 0 artifact and its tests stay reachable.
+ * kept as a standalone smoke-test route, not linked from the Connected screen.
  */
 export default function HelloScreen() {
   const [state, dispatch] = useReducer(helloReducer, initialHelloState);

@@ -1,7 +1,6 @@
 import { userEvent } from '@testing-library/react-native';
 import { renderRouter, screen } from 'expo-router/testing-library';
 
-import HelloScreen from '@/app/hello';
 import RootScreen from '@/app/index';
 import ListsRoute from '@/app/lists';
 
@@ -25,14 +24,11 @@ jest.mock('@/features/lists/use-lists', () => ({
   }),
 }));
 
-it.each([
-  ['Open task lists', '/lists', 'Task lists'],
-  ['Open Hello World screen', '/hello', 'Hello from my-nc-tasks'],
-])('navigates from the connected screen via %s', async (label, pathname, heading) => {
-  const router = await renderRouter({ index: RootScreen, lists: ListsRoute, hello: HelloScreen });
+it('opens Task lists from the connected screen', async () => {
+  const router = await renderRouter({ index: RootScreen, lists: ListsRoute });
 
   expect(router.getPathname()).toBe('/');
-  await userEvent.setup().press(screen.getByLabelText(label));
-  expect(router.getPathname()).toBe(pathname);
-  expect(screen.getByRole('header', { name: heading })).toBeOnTheScreen();
+  await userEvent.setup().press(screen.getByLabelText('Open task lists'));
+  expect(router.getPathname()).toBe('/lists');
+  expect(screen.getByRole('header', { name: 'Task lists' })).toBeOnTheScreen();
 });
