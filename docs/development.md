@@ -109,11 +109,14 @@ one button with a press counter. On a physical iPhone, verify that:
 ### Phase 1.3: verifying task-list navigation
 
 In Expo Go, sign in on the dedicated test account. The **Connected**
-screen should offer **Task lists** and **Log out**, with no Hello World
-shortcut. Tap **Task lists**. The app should open the task-list screen even
-if discovery is still loading, finds no lists, or reports an error.
+screen should show **Task lists** in white text on a blue button and
+offer **Log out**, with no Hello World shortcut. Tap **Task lists**.
+The app should open the task-list screen even if discovery is still
+loading, finds no lists, or reports an error.
 Once the lists load, create a uniquely named test list and confirm it
 appears without leaving the screen.
+Individual list rows are display-only in Phase 1.3; opening a list to
+view its tasks comes in Phase 2.
 
 ### On the simulator (macOS only)
 

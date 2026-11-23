@@ -28,7 +28,10 @@ it('opens Task lists from the connected screen', async () => {
   const router = await renderRouter({ index: RootScreen, lists: ListsRoute });
 
   expect(router.getPathname()).toBe('/');
-  await userEvent.setup().press(screen.getByLabelText('Open task lists'));
+  const taskListsLink = screen.getByRole('link', { name: 'Open task lists' });
+  expect(taskListsLink).toHaveStyle({ backgroundColor: '#2563eb' });
+  expect(screen.getByText('Task lists')).toHaveStyle({ color: '#ffffff' });
+  await userEvent.setup().press(taskListsLink);
   expect(router.getPathname()).toBe('/lists');
   expect(screen.getByRole('header', { name: 'Task lists' })).toBeOnTheScreen();
 });

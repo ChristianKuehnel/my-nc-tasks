@@ -27,10 +27,7 @@ export function AuthenticatedScreen({ session, onLogout }: AuthenticatedScreenPr
           <Text style={styles.userValue}>{session.loginName}</Text>
         </View>
         <Link href="/lists" asChild>
-          <Pressable
-            accessibilityLabel="Open task lists"
-            style={({ pressed }) => [styles.listsButton, pressed ? styles.buttonPressed : null]}
-          >
+          <Pressable accessibilityLabel="Open task lists" style={styles.listsButton}>
             <Text style={styles.listsText}>Task lists</Text>
           </Pressable>
         </Link>
