@@ -46,6 +46,8 @@ interface WebDAVRequestOptions {
   depth?: string;
   /** XML request body (propfind documents). */
   body?: string;
+  /** Additional request headers (e.g. `X-NC-CalDAV-No-Trashbin`). */
+  headers?: Record<string, string>;
   fetchImpl?: FetchLike;
   timeoutMs?: number;
   /** Follow 3xx responses to the Location header (bounded). */
@@ -117,6 +119,7 @@ export async function webdavRequest(options: WebDAVRequestOptions): Promise<WebD
     }
     const headers: Record<string, string> = {
       Authorization: basicAuthHeader(options.credentials),
+      ...options.headers,
     };
     if (options.depth !== undefined) {
       headers.Depth = options.depth;

@@ -118,6 +118,51 @@ appears without leaving the screen.
 Individual list rows are display-only in Phase 1.3; opening a list to
 view its tasks comes in Phase 2.
 
+### Phase 1.4: verifying rename, delete, and unsubscribe
+
+In Expo Go, sign in on the dedicated test account and open the task-list
+screen. For each operation, verify:
+
+**Rename (owned list):**
+
+1. Tap **Rename** on an owned list — a dialog opens prefilled with the
+   current name.
+2. Change the name and tap **Rename** — the list disappears briefly
+   (re-discovery) and reappears with the new name.
+3. Clear the name to whitespace — the **Rename** button is disabled.
+
+**Delete (owned list):**
+
+1. Tap **Delete** on an owned list — a confirmation dialog opens
+   warning that the list and all its tasks will be permanently deleted.
+2. Tap **Cancel** — no delete occurs; the list is still present.
+3. Tap **Delete** again, then **Delete** in the dialog — the list
+   disappears from the screen (re-discovery confirms removal).
+4. Verify on the test account (Web UI) that the list is gone.
+
+**Unsubscribe (shared list):**
+
+1. Have a list shared with the test account from another account.
+2. Tap **Unsubscribe** — a confirmation dialog opens explaining that
+   only the share is removed, not the owner’s data.
+3. Tap **Unsubscribe** — the shared list disappears from the
+   “Shared with me” section.
+4. Verify on the owner’s account that the list and its tasks are
+   untouched.
+
+**Permission awareness:**
+
+- Owned lists show **Rename** and **Delete** buttons; **Unsubscribe** is
+  not offered.
+- Shared lists show only **Unsubscribe**; **Rename** and **Delete** are
+  not offered (the app never attempts to delete a shared owner’s data).
+
+**Error surfacing:**
+
+- With the network disconnected, attempt any mutation — the dialog
+  stays open and shows a network error message; the list state is
+  unchanged.
+
 ### On the simulator (macOS only)
 
 Not part of the standard workflow (Linux-only development is the goal), but
@@ -158,9 +203,11 @@ gitignored `.env.nc-test`. Do not print or commit the values.
 
 This checks discovery without writing data; the suite skips without
 credentials. Only on a dedicated test account, change `NC_TEST_CREATE`
-to `1` to also create and rediscover one empty list named `CalDAV check Ü & …`.
-This check leaves the list in place. Inspect the test account manually
-afterward; an HTTP `204` alone did not confirm removal on the test server.
+to `1` to also run a full mutation round-trip: create a list named
+`CalDAV check Ü & …`, rename it, and delete it with the
+`X-NC-CalDAV-No-Trashbin: 1` header (a real permanent delete, not a
+trashbin move). On success the list is gone; verify on the test account
+that no leftover list remains.
 
 ## Continuous integration
 

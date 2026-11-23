@@ -50,8 +50,13 @@ function listsResult(overrides: Partial<UseListsResult>): UseListsResult {
     shared: [READONLY_SHARED],
     isCreating: false,
     createError: null,
+    isMutating: false,
+    mutationError: null,
     refresh: jest.fn(),
-    createList: jest.fn(async () => undefined),
+    createList: jest.fn(async () => true),
+    renameList: jest.fn(async () => true),
+    deleteList: jest.fn(async () => true),
+    unsubscribeList: jest.fn(async () => true),
     ...overrides,
   };
 }
@@ -98,8 +103,20 @@ describe('ListsScreen', () => {
     expect(screen.queryByText('My lists')).toBeNull();
   });
 
+  it('offers rename + delete for owned lists but only unsubscribe for shared lists', async () => {
+    await renderScreen();
+    // Owned row: rename and delete, but no unsubscribe.
+    expect(screen.getByLabelText('Rename Tasks')).toBeDefined();
+    expect(screen.getByLabelText('Delete Tasks')).toBeDefined();
+    expect(screen.queryByLabelText('Unsubscribe Tasks')).toBeNull();
+    // Shared row: unsubscribe, but no rename or delete of the owner's data.
+    expect(screen.getByLabelText("Unsubscribe from Bob's Tasks")).toBeDefined();
+    expect(screen.queryByLabelText("Rename Bob's Tasks")).toBeNull();
+    expect(screen.queryByLabelText("Delete Bob's Tasks")).toBeNull();
+  });
+
   it('opens the create dialog and creates a list with the entered name', async () => {
-    const createList = jest.fn(async () => undefined);
+    const createList = jest.fn(async () => true);
     await renderScreen({ createList });
 
     await fireEvent.press(screen.getByLabelText('Create a new task list'));
@@ -111,7 +128,7 @@ describe('ListsScreen', () => {
   });
 
   it('does not call createList for an empty name', async () => {
-    const createList = jest.fn(async () => undefined);
+    const createList = jest.fn(async () => true);
     await renderScreen({ createList });
 
     await fireEvent.press(screen.getByLabelText('Create a new task list'));
@@ -121,7 +138,7 @@ describe('ListsScreen', () => {
   });
 
   it('shows the creation error in the dialog and allows retry', async () => {
-    const createList = jest.fn(async () => undefined);
+    const createList = jest.fn(async () => true);
     await renderScreen({
       createList,
       createError: 'The server rejected the request (HTTP 400).',
@@ -133,5 +150,78 @@ describe('ListsScreen', () => {
     await fireEvent.changeText(screen.getByLabelText('New list name'), 'Other');
     await fireEvent.press(screen.getByLabelText('Create list'));
     expect(createList).toHaveBeenCalledWith('Other');
+  });
+
+  it('renames a list through the confirmation dialog (prefilled, confirms new name)', async () => {
+    const renameList = jest.fn(async () => true);
+    await renderScreen({ renameList });
+
+    await fireEvent.press(screen.getByLabelText('Rename Tasks'));
+    const input = screen.getByLabelText('New list name');
+    expect(input).toBeDefined();
+    expect(input.props.value).toBe('Tasks');
+
+    await fireEvent.changeText(input, 'Work');
+    await fireEvent.press(screen.getByLabelText('Confirm rename list'));
+    expect(renameList).toHaveBeenCalledWith(TASKS.url, 'Work');
+  });
+
+  it('does not rename when the name is cleared to whitespace', async () => {
+    const renameList = jest.fn(async () => true);
+    await renderScreen({ renameList });
+
+    await fireEvent.press(screen.getByLabelText('Rename Tasks'));
+    await fireEvent.changeText(screen.getByLabelText('New list name'), '   ');
+    await fireEvent.press(screen.getByLabelText('Confirm rename list'));
+    expect(renameList).not.toHaveBeenCalled();
+  });
+
+  it('surfaces a rename error and keeps the dialog open for retry', async () => {
+    const renameList = jest.fn(async () => false);
+    await renderScreen({
+      renameList,
+      mutationError: 'The server refused to rename the list (HTTP 403).',
+    });
+
+    await fireEvent.press(screen.getByLabelText('Rename Tasks'));
+    expect(screen.getByText('The server refused to rename the list (HTTP 403).')).toBeDefined();
+    // The confirm button is still present (dialog not closed on failure).
+    expect(screen.getByLabelText('Confirm rename list')).toBeDefined();
+  });
+
+  it('deletes a list only after explicit confirmation', async () => {
+    const deleteList = jest.fn(async () => true);
+    await renderScreen({ deleteList });
+
+    // Pressing Delete opens the confirmation; no delete happens yet.
+    await fireEvent.press(screen.getByLabelText('Delete Tasks'));
+    expect(screen.getByText('Delete list?')).toBeDefined();
+    expect(deleteList).not.toHaveBeenCalled();
+
+    // Cancelling performs no delete.
+    await fireEvent.press(screen.getByLabelText('Cancel'));
+    expect(deleteList).not.toHaveBeenCalled();
+
+    // Confirming deletes.
+    await fireEvent.press(screen.getByLabelText('Delete Tasks'));
+    await fireEvent.press(screen.getByLabelText('Confirm delete list'));
+    expect(deleteList).toHaveBeenCalledWith(TASKS.url);
+  });
+
+  it('refuses to offer delete for a shared list', async () => {
+    await renderScreen();
+    expect(screen.queryByLabelText("Delete Bob's Tasks")).toBeNull();
+  });
+
+  it('unsubscribes from a shared list only after explicit confirmation', async () => {
+    const unsubscribeList = jest.fn(async () => true);
+    await renderScreen({ unsubscribeList });
+
+    await fireEvent.press(screen.getByLabelText("Unsubscribe from Bob's Tasks"));
+    expect(screen.getByText('Unsubscribe?')).toBeDefined();
+    expect(unsubscribeList).not.toHaveBeenCalled();
+
+    await fireEvent.press(screen.getByLabelText('Confirm unsubscribe from list'));
+    expect(unsubscribeList).toHaveBeenCalledWith(READONLY_SHARED.url);
   });
 });
