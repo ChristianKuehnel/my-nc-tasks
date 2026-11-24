@@ -1,4 +1,4 @@
-import { discoverCalendars } from '@/services/caldav/discovery';
+import { discoverCalendars, parseDavFeatures, davRootUrl } from '@/services/caldav/discovery';
 import type { FetchLike } from '@/services/caldav/http';
 import type { CalDAVCredentials } from '@/services/caldav/types';
 
@@ -334,5 +334,66 @@ describe('discoverCalendars', () => {
       }
       expect(bodies.some((body) => body.includes('urn:ietf:params:xml:ns:caldav'))).toBe(true);
     });
+  });
+});
+
+describe('parseDavFeatures', () => {
+  it('detects sharing from the oc-resource-sharing token', () => {
+    expect(parseDavFeatures('1, 3, oc-resource-sharing, 2').sharing).toBe(true);
+  });
+
+  it('detects sharing from the calendarserver-sharing token', () => {
+    expect(parseDavFeatures('1, calendarserver-sharing').sharing).toBe(true);
+  });
+
+  it('is case- and whitespace-tolerant', () => {
+    expect(parseDavFeatures('  OC-RESOURCE-SHARING , 2 ').sharing).toBe(true);
+  });
+
+  it('reports no sharing when only version tokens are present', () => {
+    expect(parseDavFeatures('1, 2, extended-mkcol').sharing).toBe(false);
+  });
+
+  it('reports no sharing for a missing or empty header', () => {
+    expect(parseDavFeatures(null).sharing).toBe(false);
+    expect(parseDavFeatures('').sharing).toBe(false);
+  });
+});
+
+describe('davRootUrl', () => {
+  it('appends the DAV collection root path to the server base', () => {
+    expect(davRootUrl('https://cloud.example.com')).toBe(
+      'https://cloud.example.com/remote.php/dav/',
+    );
+  });
+});
+
+describe('discoverCalendars capability detection', () => {
+  const SHARING_DAV_HEADER = '1, 3, oc-resource-sharing, 2';
+
+  it('exposes sharing capability and the DAV root from the home-set response header', async () => {
+    const fetchImpl = router({
+      [WELL_KNOWN]: res(302, '', { Location: '/remote.php/dav/principals/users/alice/' }),
+      [PRINCIPAL]: res(207, PRINCIPAL_PROBE_BODY),
+      [HOME]: res(207, HOME_LISTING_BODY, { DAV: SHARING_DAV_HEADER }),
+    });
+
+    const result = await discoverCalendars(CREDENTIALS, { fetchImpl });
+
+    expect(result.capabilities.sharing).toBe(true);
+    expect(result.davRootUrl).toBe(DAV_ROOT);
+  });
+
+  it('reports no sharing capability when the DAV header is absent', async () => {
+    const fetchImpl = router({
+      [WELL_KNOWN]: res(302, '', { Location: '/remote.php/dav/principals/users/alice/' }),
+      [PRINCIPAL]: res(207, PRINCIPAL_PROBE_BODY),
+      [HOME]: res(207, HOME_LISTING_BODY),
+    });
+
+    const result = await discoverCalendars(CREDENTIALS, { fetchImpl });
+
+    expect(result.capabilities.sharing).toBe(false);
+    expect(result.davRootUrl).toBe(DAV_ROOT);
   });
 });

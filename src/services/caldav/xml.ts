@@ -108,10 +108,13 @@ export function parseMultistatus(xml: string): DAVResponse[] {
     throw new Error('Invalid DAV XML document');
   }
 
-  const multistatus = asRecord(asRecord(root)?.multistatus);
-  if (!multistatus) {
+  const rootRecord = asRecord(root);
+  if (!rootRecord || !('multistatus' in rootRecord)) {
     throw new Error('DAV document is not a multistatus response');
   }
+  // An empty `<d:multistatus/>` (zero responses) parses to a non-object;
+  // that is a valid "no results" document, not a malformed one.
+  const multistatus = asRecord(rootRecord.multistatus) ?? {};
 
   return asArray(multistatus.response).map((entry) => {
     const record = asRecord(entry);

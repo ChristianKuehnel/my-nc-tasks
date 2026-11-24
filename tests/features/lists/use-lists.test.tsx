@@ -4,6 +4,13 @@ import { createCalendar } from '@/services/caldav/collections';
 import { CalDAVError } from '@/services/caldav/http';
 import { discoverCalendars } from '@/services/caldav/discovery';
 import { deleteCalendar, renameCalendar, unsubscribeCalendar } from '@/services/caldav/mutations';
+import {
+  listShares,
+  searchPrincipals,
+  updateShares,
+  type CalendarShare,
+  type SharePrincipal,
+} from '@/services/caldav/sharing';
 import type {
   CalDAVCalendar,
   CalDAVCredentials,
@@ -22,12 +29,20 @@ jest.mock('@/services/caldav/mutations', () => ({
   deleteCalendar: jest.fn(),
   unsubscribeCalendar: jest.fn(),
 }));
+jest.mock('@/services/caldav/sharing', () => ({
+  listShares: jest.fn(),
+  searchPrincipals: jest.fn(),
+  updateShares: jest.fn(),
+}));
 
 const mockDiscover = discoverCalendars as jest.MockedFunction<typeof discoverCalendars>;
 const mockCreate = createCalendar as jest.MockedFunction<typeof createCalendar>;
 const mockRename = renameCalendar as jest.MockedFunction<typeof renameCalendar>;
 const mockDelete = deleteCalendar as jest.MockedFunction<typeof deleteCalendar>;
 const mockUnsubscribe = unsubscribeCalendar as jest.MockedFunction<typeof unsubscribeCalendar>;
+const mockListShares = listShares as jest.MockedFunction<typeof listShares>;
+const mockSearchPrincipals = searchPrincipals as jest.MockedFunction<typeof searchPrincipals>;
+const mockUpdateShares = updateShares as jest.MockedFunction<typeof updateShares>;
 
 const CREDENTIALS: CalDAVCredentials = {
   serverUrl: 'https://cloud.example.com',
@@ -74,12 +89,17 @@ describe('useLists', () => {
     mockDiscover.mockReset().mockResolvedValue({
       principalUrl: 'https://cloud.example.com/remote.php/dav/principals/users/alice/',
       homeSetUrl: HOME,
+      davRootUrl: 'https://cloud.example.com/remote.php/dav/',
+      capabilities: { sharing: false },
       calendars: [TASKS, SHARED, EVENTS],
     });
     mockCreate.mockReset().mockResolvedValue({ url: `${HOME}work/` });
     mockRename.mockReset().mockResolvedValue(undefined);
     mockDelete.mockReset().mockResolvedValue(undefined);
     mockUnsubscribe.mockReset().mockResolvedValue(undefined);
+    mockListShares.mockReset().mockResolvedValue([]);
+    mockSearchPrincipals.mockReset().mockResolvedValue([]);
+    mockUpdateShares.mockReset().mockResolvedValue(undefined);
   });
 
   it('loads task lists only (VEVENT calendars are filtered out)', async () => {
@@ -103,6 +123,8 @@ describe('useLists', () => {
       .mockResolvedValueOnce({
         principalUrl: 'https://cloud.example.com/remote.php/dav/principals/users/alice/',
         homeSetUrl: HOME,
+        davRootUrl: 'https://cloud.example.com/remote.php/dav/',
+        capabilities: { sharing: false },
         calendars: [TASKS],
       });
 
@@ -167,6 +189,8 @@ describe('useLists', () => {
       resolveDiscover({
         principalUrl: 'https://cloud.example.com/remote.php/dav/principals/users/alice/',
         homeSetUrl: HOME,
+        davRootUrl: 'https://cloud.example.com/remote.php/dav/',
+        capabilities: { sharing: false },
         calendars: [TASKS],
       });
     });
@@ -246,5 +270,131 @@ describe('useLists', () => {
     expect(mockUnsubscribe).toHaveBeenCalledWith(CREDENTIALS, TASKS.url, expect.anything());
     expect(ok).toBe(true);
     expect(mockDiscover).toHaveBeenCalledTimes(2);
+  });
+
+  describe('sharing', () => {
+    const DAV_ROOT = 'https://cloud.example.com/remote.php/dav/';
+
+    it('reflects the sharing capability from discovery', async () => {
+      mockDiscover.mockResolvedValue({
+        principalUrl: 'https://cloud.example.com/remote.php/dav/principals/users/alice/',
+        homeSetUrl: HOME,
+        davRootUrl: DAV_ROOT,
+        capabilities: { sharing: true },
+        calendars: [TASKS],
+      });
+      const { result } = await renderHook(() => useLists(CREDENTIALS));
+      await waitFor(() => expect(result.current.status).toBe('ready'));
+      expect(result.current.sharingSupported).toBe(true);
+    });
+
+    it('shareCalendar sends a set, refreshes shares, and reports success', async () => {
+      const share: CalendarShare = {
+        principal: 'principal:principals/users/bob',
+        displayName: 'Bob',
+        access: 'read',
+      };
+      mockListShares.mockResolvedValueOnce([share]);
+      const { result } = await renderHook(() => useLists(CREDENTIALS));
+      await waitFor(() => expect(result.current.status).toBe('ready'));
+
+      let ok = false;
+      await act(async () => {
+        ok = await result.current.shareCalendar(
+          TASKS.url,
+          'principal:principals/users/bob',
+          'read',
+        );
+      });
+
+      expect(mockUpdateShares).toHaveBeenCalledWith(
+        CREDENTIALS,
+        TASKS.url,
+        [{ principal: 'principal:principals/users/bob', access: 'read' }],
+        [],
+        expect.anything(),
+      );
+      expect(ok).toBe(true);
+      expect(result.current.getShares(TASKS.url)).toEqual([share]);
+    });
+
+    it('shareCalendar surfaces a forbidden refusal and keeps the previous shares', async () => {
+      mockUpdateShares.mockRejectedValueOnce(
+        new CalDAVError('forbidden', 'The server refused access (HTTP 403).'),
+      );
+      const { result } = await renderHook(() => useLists(CREDENTIALS));
+      await waitFor(() => expect(result.current.status).toBe('ready'));
+
+      let ok = true;
+      await act(async () => {
+        ok = await result.current.shareCalendar(
+          TASKS.url,
+          'principal:principals/users/bob',
+          'read',
+        );
+      });
+
+      expect(ok).toBe(false);
+      expect(result.current.shareError).toBe('The server refused access (HTTP 403).');
+      expect(result.current.getShares(TASKS.url)).toEqual([]);
+    });
+
+    it('revokeShare sends a remove for the sharee', async () => {
+      const { result } = await renderHook(() => useLists(CREDENTIALS));
+      await waitFor(() => expect(result.current.status).toBe('ready'));
+
+      let ok = false;
+      await act(async () => {
+        ok = await result.current.revokeShare(TASKS.url, 'principal:principals/users/bob');
+      });
+
+      expect(mockUpdateShares).toHaveBeenCalledWith(
+        CREDENTIALS,
+        TASKS.url,
+        [],
+        ['principal:principals/users/bob'],
+        expect.anything(),
+      );
+      expect(ok).toBe(true);
+    });
+
+    it('searchSharePrincipals queries the DAV root and returns the results', async () => {
+      const results: SharePrincipal[] = [
+        { principal: '/remote.php/dav/principals/users/bob/', displayName: 'Bob', kind: 'user' },
+      ];
+      mockSearchPrincipals.mockResolvedValueOnce(results);
+      const { result } = await renderHook(() => useLists(CREDENTIALS));
+      await waitFor(() => expect(result.current.status).toBe('ready'));
+
+      let found: SharePrincipal[] = [];
+      await act(async () => {
+        found = await result.current.searchSharePrincipals('bob');
+      });
+
+      expect(mockSearchPrincipals).toHaveBeenCalledWith(
+        CREDENTIALS,
+        DAV_ROOT,
+        'bob',
+        expect.anything(),
+      );
+      expect(found).toEqual(results);
+    });
+
+    it('refreshShares loads the calendar shares into state', async () => {
+      const share: CalendarShare = {
+        principal: 'principal:principals/groups/team',
+        displayName: null,
+        access: 'read',
+      };
+      mockListShares.mockResolvedValueOnce([share]);
+      const { result } = await renderHook(() => useLists(CREDENTIALS));
+      await waitFor(() => expect(result.current.status).toBe('ready'));
+
+      expect(result.current.getShares(TASKS.url)).toEqual([]);
+      await act(async () => {
+        await result.current.refreshShares(TASKS.url);
+      });
+      expect(result.current.getShares(TASKS.url)).toEqual([share]);
+    });
   });
 });
