@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import { createCalendar } from '@/services/caldav/collections';
 import { discoverCalendars } from '@/services/caldav/discovery';
+import { renameCalendar, deleteCalendar } from '@/services/caldav/mutations';
 import { normalizeServerUrl } from '@/services/nextcloud/server-url';
 import { nodeFetch } from './node-fetch';
 
@@ -35,16 +36,21 @@ const deps = { fetchImpl: nodeFetch };
     expect(result.calendars.some((calendar) => calendar.isOwned && calendar.canRead)).toBe(true);
   });
 
-  // Explicit opt-in: this leaves an empty list on the dedicated test account.
-  // Never assume a successful DELETE status proves cleanup on this server.
+  // Explicit opt-in: this creates, renames, and deletes a list on the
+  // dedicated test account. The delete uses the no-trashbin header, so the
+  // list is actually removed (not just moved to the calendar trashbin).
   (NC_TEST_CREATE === '1' ? it : it.skip)(
-    'creates a writable VTODO list and rediscovers its display name',
+    'creates, renames, and deletes a VTODO list (full mutation round-trip)',
     async () => {
       if (!credentials) return;
       const { homeSetUrl } = await discoverCalendars(credentials, deps);
       const name = `CalDAV check Ü & ${randomUUID()}`;
+
+      // Create
       const { url } = await createCalendar(credentials, homeSetUrl, name, deps);
-      const { calendars } = await discoverCalendars(credentials, deps);
+
+      // Verify it appears in discovery
+      let { calendars } = await discoverCalendars(credentials, deps);
       expect(calendars.find((calendar) => calendar.url === url)).toMatchObject({
         displayName: name,
         components: ['VTODO'],
@@ -53,6 +59,18 @@ const deps = { fetchImpl: nodeFetch };
         canRead: true,
         canWrite: true,
       });
+
+      // Rename
+      const newName = `Renamed ${randomUUID()}`;
+      await renameCalendar(credentials, url, newName, deps);
+      ({ calendars } = await discoverCalendars(credentials, deps));
+      const renamed = calendars.find((calendar) => calendar.url === url);
+      expect(renamed?.displayName).toBe(newName);
+
+      // Delete (no-trashbin header → real permanent delete)
+      await deleteCalendar(credentials, url, deps);
+      ({ calendars } = await discoverCalendars(credentials, deps));
+      expect(calendars.find((calendar) => calendar.url === url)).toBeUndefined();
     },
   );
 });

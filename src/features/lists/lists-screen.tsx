@@ -13,6 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { CreateCalendarDeps } from '@/services/caldav/collections';
+import type { CalDAVCalendar } from '@/services/caldav/types';
 import type { AuthSession } from '@/services/nextcloud/types';
 import { useLists } from './use-lists';
 
@@ -21,6 +22,14 @@ interface ListsScreenProps {
   /** Optional dependency overrides (used by tests). */
   options?: CreateCalendarDeps;
 }
+
+/** Which dialog is open (at most one at a time), or `null`. */
+type Dialog =
+  | { kind: 'create' }
+  | { kind: 'rename'; calendar: CalDAVCalendar }
+  | { kind: 'delete'; calendar: CalDAVCalendar }
+  | { kind: 'unsubscribe'; calendar: CalDAVCalendar }
+  | null;
 
 function toCredentials(session: AuthSession) {
   return {
@@ -31,19 +40,32 @@ function toCredentials(session: AuthSession) {
 }
 
 /**
- * Task list overview (Phase 1.3): owned and shared VTODO calendars with
- * empty/loading/error states and a name-input flow for creating new lists
- * (MKCALENDAR). Shared lists are clearly marked; read-only shared lists
- * offer no mutations from this screen.
+ * Task list overview (Phases 1.3 + 1.4): owned and shared VTODO calendars
+ * with empty/loading/error states, a create flow (MKCALENDAR), and safe
+ * mutations — rename (PROPPATCH), delete (owned only, no trashbin), and
+ * unsubscribe (shared only, removes the share). Every mutation is guarded by
+ * a confirmation dialog and permission-aware: owned lists offer rename +
+ * delete, shared lists offer only unsubscribe, so a shared owner's data is
+ * never touched from this screen.
  */
 export function ListsScreen({ session, options }: ListsScreenProps) {
   const lists = useLists(toCredentials(session), options);
-  const [isCreating, setIsCreating] = useState(false);
-  const [name, setName] = useState('');
+  const [dialog, setDialog] = useState<Dialog>(null);
+  const [draftName, setDraftName] = useState('');
 
-  const closeCreate = () => {
-    setIsCreating(false);
-    setName('');
+  const busy = lists.isCreating || lists.isMutating;
+  const closeDialog = () => {
+    setDialog(null);
+    setDraftName('');
+  };
+
+  const openCreate = () => {
+    setDraftName('');
+    setDialog({ kind: 'create' });
+  };
+  const openRename = (calendar: CalDAVCalendar) => {
+    setDraftName(calendar.displayName);
+    setDialog({ kind: 'rename', calendar });
   };
 
   if (lists.status === 'loading') {
@@ -91,7 +113,8 @@ export function ListsScreen({ session, options }: ListsScreenProps) {
             accessibilityRole="button"
             accessibilityLabel="Create a new task list"
             style={({ pressed }) => [styles.newButton, pressed ? styles.pressed : null]}
-            onPress={() => setIsCreating(true)}
+            onPress={openCreate}
+            disabled={busy}
           >
             <Text style={styles.newButtonText}>+ New list</Text>
           </Pressable>
@@ -108,7 +131,13 @@ export function ListsScreen({ session, options }: ListsScreenProps) {
         {lists.owned.length > 0 && (
           <Section title="My lists">
             {lists.owned.map((calendar) => (
-              <ListRow key={calendar.url} name={calendar.displayName} />
+              <ListRow
+                key={calendar.url}
+                name={calendar.displayName}
+                busy={busy}
+                onRename={() => openRename(calendar)}
+                onDelete={() => setDialog({ kind: 'delete', calendar })}
+              />
             ))}
           </Section>
         )}
@@ -120,62 +149,134 @@ export function ListsScreen({ session, options }: ListsScreenProps) {
                 key={calendar.url}
                 name={calendar.displayName}
                 subtitle={calendar.canWrite ? 'Shared with you' : 'Shared with you · read-only'}
+                busy={busy}
+                onUnsubscribe={() => setDialog({ kind: 'unsubscribe', calendar })}
               />
             ))}
           </Section>
         )}
       </ScrollView>
 
-      {isCreating && (
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.overlay}
-        >
-          <View style={styles.dialog}>
-            <Text style={styles.dialogTitle} accessibilityRole="header">
-              New task list
-            </Text>
-            <TextInput
-              accessibilityLabel="New list name"
-              style={styles.input}
-              placeholder="List name"
-              placeholderTextColor="#9ca3af"
-              value={name}
-              onChangeText={setName}
-              autoFocus
-              autoCorrect={false}
-            />
-            {lists.createError !== null && (
-              <Text style={styles.createError}>{lists.createError}</Text>
-            )}
-            <View style={styles.dialogActions}>
-              <Pressable
-                accessibilityRole="button"
+      {dialog?.kind === 'create' && (
+        <DialogShell
+          title="New task list"
+          error={lists.createError}
+          actions={
+            <>
+              <DialogButton
+                label="Cancel"
                 accessibilityLabel="Cancel creating a list"
-                style={({ pressed }) => [styles.cancelButton, pressed ? styles.pressed : null]}
-                onPress={closeCreate}
                 disabled={lists.isCreating}
-              >
-                <Text style={styles.cancelText}>Cancel</Text>
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={lists.isCreating ? 'Creating list' : 'Create list'}
-                style={({ pressed }) => [
-                  styles.createButton,
-                  name.trim() === '' || lists.isCreating ? styles.createButtonDisabled : null,
-                  pressed ? styles.pressed : null,
-                ]}
+                onPress={closeDialog}
+              />
+              <DialogButton
+                label={lists.isCreating ? 'Creating…' : 'Create'}
+                accessibilityLabel="Create list"
+                disabled={draftName.trim() === '' || lists.isCreating}
+                primary
                 onPress={() => {
-                  void lists.createList(name).then(closeCreate);
+                  void lists.createList(draftName).then((ok) => {
+                    if (ok) {
+                      closeDialog();
+                    }
+                  });
                 }}
-                disabled={name.trim() === '' || lists.isCreating}
-              >
-                <Text style={styles.createText}>{lists.isCreating ? 'Creating…' : 'Create'}</Text>
-              </Pressable>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
+              />
+            </>
+          }
+        >
+          <TextInput
+            accessibilityLabel="New list name"
+            style={styles.input}
+            placeholder="List name"
+            placeholderTextColor="#9ca3af"
+            value={draftName}
+            onChangeText={setDraftName}
+            autoFocus
+            autoCorrect={false}
+          />
+        </DialogShell>
+      )}
+
+      {dialog?.kind === 'rename' && (
+        <DialogShell
+          title="Rename list"
+          error={lists.mutationError}
+          actions={
+            <>
+              <DialogButton
+                label="Cancel"
+                accessibilityLabel="Cancel renaming a list"
+                disabled={lists.isMutating}
+                onPress={closeDialog}
+              />
+              <DialogButton
+                label={lists.isMutating ? 'Renaming…' : 'Rename'}
+                accessibilityLabel="Confirm rename list"
+                disabled={draftName.trim() === '' || lists.isMutating}
+                primary
+                onPress={() => {
+                  void lists.renameList(dialog.calendar.url, draftName).then((ok) => {
+                    if (ok) {
+                      closeDialog();
+                    }
+                  });
+                }}
+              />
+            </>
+          }
+        >
+          <TextInput
+            accessibilityLabel="New list name"
+            style={styles.input}
+            placeholder="List name"
+            placeholderTextColor="#9ca3af"
+            value={draftName}
+            onChangeText={setDraftName}
+            autoFocus
+            autoCorrect={false}
+          />
+        </DialogShell>
+      )}
+
+      {dialog?.kind === 'delete' && (
+        <ConfirmDialog
+          title="Delete list?"
+          message={`“${dialog.calendar.displayName}” and all of its tasks will be permanently deleted. This cannot be undone.`}
+          confirmLabel={lists.isMutating ? 'Deleting…' : 'Delete'}
+          confirmAccessibilityLabel="Confirm delete list"
+          busy={lists.isMutating}
+          error={lists.mutationError}
+          destructive
+          onCancel={closeDialog}
+          onConfirm={() => {
+            void lists.deleteList(dialog.calendar.url).then((ok) => {
+              if (ok) {
+                closeDialog();
+              }
+            });
+          }}
+        />
+      )}
+
+      {dialog?.kind === 'unsubscribe' && (
+        <ConfirmDialog
+          title="Unsubscribe?"
+          message={`“${dialog.calendar.displayName}” will be removed from your account. The owner’s list and its tasks are not affected.`}
+          confirmLabel={lists.isMutating ? 'Unsubscribing…' : 'Unsubscribe'}
+          confirmAccessibilityLabel="Confirm unsubscribe from list"
+          busy={lists.isMutating}
+          error={lists.mutationError}
+          destructive
+          onCancel={closeDialog}
+          onConfirm={() => {
+            void lists.unsubscribeList(dialog.calendar.url).then((ok) => {
+              if (ok) {
+                closeDialog();
+              }
+            });
+          }}
+        />
       )}
     </SafeAreaView>
   );
@@ -198,14 +299,197 @@ function Section({ title, children }: SectionProps) {
 interface ListRowProps {
   name: string;
   subtitle?: string;
+  busy: boolean;
+  onRename?: () => void;
+  onDelete?: () => void;
+  onUnsubscribe?: () => void;
 }
 
-function ListRow({ name, subtitle }: ListRowProps) {
+function ListRow({ name, subtitle, busy, onRename, onDelete, onUnsubscribe }: ListRowProps) {
+  const hasActions =
+    onRename !== undefined || onDelete !== undefined || onUnsubscribe !== undefined;
   return (
     <View style={styles.row} accessibilityRole="listitem" accessibilityLabel={name}>
-      <Text style={styles.rowName}>{name}</Text>
-      {subtitle !== undefined && <Text style={styles.rowSubtitle}>{subtitle}</Text>}
+      <View style={styles.rowText}>
+        <Text style={styles.rowName}>{name}</Text>
+        {subtitle !== undefined && <Text style={styles.rowSubtitle}>{subtitle}</Text>}
+      </View>
+      {hasActions && (
+        <View style={styles.rowActions}>
+          {onRename !== undefined && (
+            <RowButton
+              label="Rename"
+              accessibilityLabel={`Rename ${name}`}
+              disabled={busy}
+              onPress={onRename}
+            />
+          )}
+          {onUnsubscribe !== undefined && (
+            <RowButton
+              label="Unsubscribe"
+              accessibilityLabel={`Unsubscribe from ${name}`}
+              disabled={busy}
+              onPress={onUnsubscribe}
+            />
+          )}
+          {onDelete !== undefined && (
+            <RowButton
+              label="Delete"
+              accessibilityLabel={`Delete ${name}`}
+              disabled={busy}
+              destructive
+              onPress={onDelete}
+            />
+          )}
+        </View>
+      )}
     </View>
+  );
+}
+
+interface RowButtonProps {
+  label: string;
+  accessibilityLabel: string;
+  disabled: boolean;
+  destructive?: boolean;
+  onPress: () => void;
+}
+
+function RowButton({ label, accessibilityLabel, disabled, destructive, onPress }: RowButtonProps) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      style={({ pressed }) => [
+        styles.rowButton,
+        destructive ? styles.rowButtonDestructive : null,
+        pressed ? styles.pressed : null,
+      ]}
+      disabled={disabled}
+      onPress={onPress}
+    >
+      <Text style={[styles.rowButtonText, destructive ? styles.rowButtonTextDestructive : null]}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+interface DialogShellProps {
+  title: string;
+  error?: string | null;
+  children: React.ReactNode;
+  actions: React.ReactNode;
+}
+
+function DialogShell({ title, error, children, actions }: DialogShellProps) {
+  return (
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      style={styles.overlay}
+    >
+      <View style={styles.dialog} accessibilityRole="dialog">
+        <Text style={styles.dialogTitle} accessibilityRole="header">
+          {title}
+        </Text>
+        {children}
+        {error !== undefined && error !== null && <Text style={styles.mutationError}>{error}</Text>}
+        <View style={styles.dialogActions}>{actions}</View>
+      </View>
+    </KeyboardAvoidingView>
+  );
+}
+
+interface ConfirmDialogProps {
+  title: string;
+  message: string;
+  confirmLabel: string;
+  confirmAccessibilityLabel: string;
+  busy: boolean;
+  error?: string | null;
+  destructive?: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}
+
+function ConfirmDialog({
+  title,
+  message,
+  confirmLabel,
+  confirmAccessibilityLabel,
+  busy,
+  error,
+  destructive,
+  onCancel,
+  onConfirm,
+}: ConfirmDialogProps) {
+  return (
+    <DialogShell
+      title={title}
+      error={error}
+      actions={
+        <>
+          <DialogButton
+            label="Cancel"
+            accessibilityLabel="Cancel"
+            disabled={busy}
+            onPress={onCancel}
+          />
+          <DialogButton
+            label={confirmLabel}
+            accessibilityLabel={confirmAccessibilityLabel}
+            disabled={busy}
+            destructive={destructive}
+            onPress={onConfirm}
+          />
+        </>
+      }
+    >
+      <Text style={styles.dialogBody}>{message}</Text>
+    </DialogShell>
+  );
+}
+
+interface DialogButtonProps {
+  label: string;
+  accessibilityLabel: string;
+  disabled?: boolean;
+  primary?: boolean;
+  destructive?: boolean;
+  onPress: () => void;
+}
+
+function DialogButton({
+  label,
+  accessibilityLabel,
+  disabled,
+  primary,
+  destructive,
+  onPress,
+}: DialogButtonProps) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      style={({ pressed }) => [
+        styles.dialogButton,
+        primary ? styles.dialogButtonPrimary : null,
+        destructive ? styles.dialogButtonDestructive : null,
+        disabled ? styles.dialogButtonDisabled : null,
+        pressed ? styles.pressed : null,
+      ]}
+      disabled={disabled}
+      onPress={onPress}
+    >
+      <Text
+        style={[
+          styles.dialogButtonText,
+          primary || destructive ? styles.dialogButtonTextInverse : null,
+        ]}
+      >
+        {label}
+      </Text>
+    </Pressable>
   );
 }
 
@@ -293,6 +577,13 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  rowText: {
+    flex: 1,
     gap: 2,
   },
   rowName: {
@@ -302,6 +593,28 @@ const styles = StyleSheet.create({
   rowSubtitle: {
     fontSize: 13,
     color: '#6b7280',
+  },
+  rowActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  rowButton: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  rowButtonDestructive: {
+    borderColor: '#fca5a5',
+  },
+  rowButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  rowButtonTextDestructive: {
+    color: '#dc2626',
   },
   pressed: {
     opacity: 0.7,
@@ -322,6 +635,11 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
   },
+  dialogBody: {
+    fontSize: 15,
+    color: '#374151',
+    lineHeight: 21,
+  },
   input: {
     borderWidth: 1,
     borderColor: '#d1d5db',
@@ -330,7 +648,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     fontSize: 16,
   },
-  createError: {
+  mutationError: {
     fontSize: 14,
     color: '#dc2626',
   },
@@ -339,28 +657,26 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     gap: 10,
   },
-  cancelButton: {
+  dialogButton: {
     borderRadius: 10,
     paddingHorizontal: 18,
     paddingVertical: 10,
   },
-  cancelText: {
+  dialogButtonPrimary: {
+    backgroundColor: '#2563eb',
+  },
+  dialogButtonDestructive: {
+    backgroundColor: '#dc2626',
+  },
+  dialogButtonDisabled: {
+    opacity: 0.5,
+  },
+  dialogButtonText: {
     fontSize: 15,
     fontWeight: '600',
     color: '#374151',
   },
-  createButton: {
-    borderRadius: 10,
-    backgroundColor: '#2563eb',
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-  },
-  createButtonDisabled: {
-    opacity: 0.5,
-  },
-  createText: {
-    fontSize: 15,
-    fontWeight: '600',
+  dialogButtonTextInverse: {
     color: '#ffffff',
   },
 });

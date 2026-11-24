@@ -3,6 +3,7 @@ import { act, renderHook, waitFor } from '@testing-library/react-native';
 import { createCalendar } from '@/services/caldav/collections';
 import { CalDAVError } from '@/services/caldav/http';
 import { discoverCalendars } from '@/services/caldav/discovery';
+import { deleteCalendar, renameCalendar, unsubscribeCalendar } from '@/services/caldav/mutations';
 import type {
   CalDAVCalendar,
   CalDAVCredentials,
@@ -16,9 +17,17 @@ jest.mock('@/services/caldav/discovery', () => ({
 jest.mock('@/services/caldav/collections', () => ({
   createCalendar: jest.fn(),
 }));
+jest.mock('@/services/caldav/mutations', () => ({
+  renameCalendar: jest.fn(),
+  deleteCalendar: jest.fn(),
+  unsubscribeCalendar: jest.fn(),
+}));
 
 const mockDiscover = discoverCalendars as jest.MockedFunction<typeof discoverCalendars>;
 const mockCreate = createCalendar as jest.MockedFunction<typeof createCalendar>;
+const mockRename = renameCalendar as jest.MockedFunction<typeof renameCalendar>;
+const mockDelete = deleteCalendar as jest.MockedFunction<typeof deleteCalendar>;
+const mockUnsubscribe = unsubscribeCalendar as jest.MockedFunction<typeof unsubscribeCalendar>;
 
 const CREDENTIALS: CalDAVCredentials = {
   serverUrl: 'https://cloud.example.com',
@@ -68,6 +77,9 @@ describe('useLists', () => {
       calendars: [TASKS, SHARED, EVENTS],
     });
     mockCreate.mockReset().mockResolvedValue({ url: `${HOME}work/` });
+    mockRename.mockReset().mockResolvedValue(undefined);
+    mockDelete.mockReset().mockResolvedValue(undefined);
+    mockUnsubscribe.mockReset().mockResolvedValue(undefined);
   });
 
   it('loads task lists only (VEVENT calendars are filtered out)', async () => {
@@ -159,5 +171,80 @@ describe('useLists', () => {
       });
     });
     await waitFor(() => expect(result.current.status).toBe('ready'));
+  });
+
+  it('renameList calls renameCalendar and re-discovers on success', async () => {
+    const { result } = await renderHook(() => useLists(CREDENTIALS));
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+
+    let ok = false;
+    await act(async () => {
+      ok = await result.current.renameList(TASKS.url, 'Work');
+    });
+
+    expect(mockRename).toHaveBeenCalledWith(CREDENTIALS, TASKS.url, 'Work', expect.anything());
+    expect(ok).toBe(true);
+    expect(mockDiscover).toHaveBeenCalledTimes(2);
+    expect(result.current.isMutating).toBe(false);
+    expect(result.current.mutationError).toBeNull();
+  });
+
+  it('renameList surfaces a forbidden refusal', async () => {
+    mockRename.mockRejectedValueOnce(
+      new CalDAVError('forbidden', 'The server refused to rename the list (HTTP 403).'),
+    );
+    const { result } = await renderHook(() => useLists(CREDENTIALS));
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+
+    let ok = true;
+    await act(async () => {
+      ok = await result.current.renameList(TASKS.url, 'Work');
+    });
+
+    expect(ok).toBe(false);
+    expect(result.current.mutationError).toBe('The server refused to rename the list (HTTP 403).');
+    expect(result.current.isMutating).toBe(false);
+  });
+
+  it('deleteList calls deleteCalendar and re-discovers on success', async () => {
+    const { result } = await renderHook(() => useLists(CREDENTIALS));
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+
+    let ok = false;
+    await act(async () => {
+      ok = await result.current.deleteList(TASKS.url);
+    });
+
+    expect(mockDelete).toHaveBeenCalledWith(CREDENTIALS, TASKS.url, expect.anything());
+    expect(ok).toBe(true);
+    expect(mockDiscover).toHaveBeenCalledTimes(2);
+  });
+
+  it('deleteList surfaces a network error', async () => {
+    mockDelete.mockRejectedValueOnce(new CalDAVError('network', 'Could not reach the server.'));
+    const { result } = await renderHook(() => useLists(CREDENTIALS));
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+
+    let ok = true;
+    await act(async () => {
+      ok = await result.current.deleteList(TASKS.url);
+    });
+
+    expect(ok).toBe(false);
+    expect(result.current.mutationError).toBe('Could not reach the server.');
+  });
+
+  it('unsubscribeList calls unsubscribeCalendar and re-discovers on success', async () => {
+    const { result } = await renderHook(() => useLists(CREDENTIALS));
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+
+    let ok = false;
+    await act(async () => {
+      ok = await result.current.unsubscribeList(TASKS.url);
+    });
+
+    expect(mockUnsubscribe).toHaveBeenCalledWith(CREDENTIALS, TASKS.url, expect.anything());
+    expect(ok).toBe(true);
+    expect(mockDiscover).toHaveBeenCalledTimes(2);
   });
 });

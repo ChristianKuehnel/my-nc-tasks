@@ -40,8 +40,13 @@ function listsResult(overrides: Partial<UseListsResult>): UseListsResult {
     shared: [],
     isCreating: false,
     createError: null,
+    isMutating: false,
+    mutationError: null,
     refresh: jest.fn(),
-    createList: jest.fn(async () => undefined),
+    createList: jest.fn(async () => true),
+    renameList: jest.fn(async () => true),
+    deleteList: jest.fn(async () => true),
+    unsubscribeList: jest.fn(async () => true),
     ...overrides,
   };
 }

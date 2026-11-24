@@ -141,3 +141,66 @@ export function parseMultistatus(xml: string): DAVResponse[] {
     return { href, properties };
   });
 }
+
+/** One property entry of a RFC 3744 `PROPPATCH` response. */
+export interface PropStatEntry {
+  /** Property name (namespace prefix stripped), e.g. `displayname`. */
+  property: string;
+  /** HTTP status code reported for the property (`0` when unparsable). */
+  status: number;
+}
+
+/**
+ * Parse a RFC 3744 `PROPPATCH` multistatus into the per-property HTTP status
+ * codes reported by the server.
+ *
+ * Unlike `parseMultistatus`, this keeps the `propstat` boundaries and their
+ * statuses. A PROPPATCH is reported with an overall HTTP 207 even when the
+ * server *refused* a property (a `403`/`404` propstat for the rejected
+ * property), so a caller must inspect the per-property status to know whether
+ * a specific property — e.g. `displayname` — was actually applied.
+ *
+ * A single property can appear in several propstat blocks; every reported
+ * status is returned, in document order. Returns `[]` when the document is
+ * not a parseable multistatus.
+ */
+export function parsePropPatchPropStats(xml: string): PropStatEntry[] {
+  let root: unknown;
+  try {
+    root = parser.parse(xml);
+  } catch {
+    return [];
+  }
+  const multistatus = asRecord(asRecord(root)?.multistatus);
+  if (!multistatus) {
+    return [];
+  }
+
+  const entries: PropStatEntry[] = [];
+  for (const response of asArray(multistatus.response)) {
+    const record = asRecord(response);
+    if (!record) {
+      continue;
+    }
+    for (const propstat of asArray(record.propstat)) {
+      const propstatRecord = asRecord(propstat);
+      if (!propstatRecord) {
+        continue;
+      }
+      const statusText = firstText(propstatRecord.status) ?? '';
+      const match = /HTTP\/[\d.]+\s+(\d{3})/.exec(statusText);
+      const status = match ? Number(match[1]) : 0;
+      const prop = asRecord(propstatRecord.prop);
+      if (!prop) {
+        continue;
+      }
+      for (const name of Object.keys(prop)) {
+        if (name.startsWith(ATTR_PREFIX)) {
+          continue;
+        }
+        entries.push({ property: name, status });
+      }
+    }
+  }
+  return entries;
+}

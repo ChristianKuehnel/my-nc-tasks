@@ -128,10 +128,10 @@ Security notes:
 - Logout deletes exactly the owned key set; unrelated SecureStore/Keychain
   entries of other apps are untouched.
 
-## CalDAV discovery
+## CalDAV discovery and mutations
 
-Discovery of task-list calendars (Phase 1.2, issue #15) lives in
-`src/services/caldav` — pure TypeScript, no React or SQLite.
+Discovery (Phase 1.2, issue #15) and mutations (Phase 1.4, issue #17) live
+in `src/services/caldav` — pure TypeScript, no React or SQLite.
 
 Flow (per authenticated session, RFC 6764 + RFC 4791):
 
@@ -174,6 +174,16 @@ Implementation notes:
   previously supported `privilege-uri` representation.
 - `discovery.ts` — the three-step flow; results are absolute URLs with
   canonical trailing slashes.
+- `mutations.ts` — `renameCalendar` (RFC 3744 `PROPPATCH` on
+  `DAV:displayname`), `deleteCalendar` (DAV `DELETE` with the Nextcloud
+  `X-NC-CalDAV-No-Trashbin: 1` header for a permanent delete on NC 30+;
+  unknown servers ignore the header and `DELETE` was already permanent),
+  and `unsubscribeCalendar` (plain DAV `DELETE`; Nextcloud routes the
+  delete of a shared calendar to `unshare()`, leaving the owner's data
+  untouched). A 207 `PROPPATCH` response is inspected per-property: the
+  overall HTTP 207 is success at the protocol level, but a `403`/`404`
+  propstat for `displayname` means the rename was refused.
+  `xml.ts` — `parsePropPatchPropStats` extracts the per-property statuses.
 - Error surface: `CalDAVError` with stable codes — `network`, `timeout`,
   `bad_request`, `unauthorized`, `forbidden`, `not_found`, `server_error`
   — so the UI layer (later phases) can map them to user-facing messages.
@@ -181,23 +191,31 @@ Implementation notes:
   integration suite exercises the same service modules over HTTPS; see
   [the development guide](development.md#live-caldav-checks).
 
-## List browsing and create (task lists)
+## List browsing, create, and mutations (task lists)
 
-The lists feature (Phase 1.3, issue #16) is the first UI feature built on
-top of the CalDAV client. It reads the calendars already discovered in
-Phase 1.2, splits them into **owned** and **shared** lists, and lets the
-user **create** a new task list.
+The lists feature (Phases 1.3 + 1.4, issues #16 + #17) is the first UI
+feature built on top of the CalDAV client. It reads the calendars already
+discovered in Phase 1.2, splits them into **owned** and **shared** lists,
+and lets the user **create**, **rename**, **delete** (owned only), and
+**unsubscribe** (shared only) task lists. Every mutation is guarded by a
+confirmation dialog; the UI enforces permission awareness (owned lists
+offer rename + delete, shared lists offer only unsubscribe) so a shared
+owner’s data is never touched from this screen.
 
 - `src/features/lists/use-lists.ts` — `useLists(session)`. A small
   state machine (`loading` / `ready` / `error`) that wraps
   `discoverCalendars` for the initial load and `refresh`, and
-  `createCalendar` for creation. After a create it **re-discovers**
-  rather than assuming a server-side name or ordering, so the rendered
-  state always matches the server. A stale guard prevents an in-flight
-  load from clobbering a newer one.
+  `createCalendar` for creation, and the Phase 1.4 mutations
+  (`renameCalendar`, `deleteCalendar`, `unsubscribeCalendar`). After
+  every mutation it **re-discovers** rather than assuming a server-side
+  name, ordering, or permission change, so the rendered state always
+  matches the server. A stale guard prevents an in-flight load from
+  clobbering a newer one; a single-flight guard prevents concurrent
+  mutations.
 - `src/features/lists/lists-screen.tsx` — presentational screen: owned /
-  shared sections, empty / loading / error states, and a create dialog.
-  Shared lists are read-only here (mutations land in Phase 1.4).
+  shared sections, empty / loading / error states, a create dialog, and
+  per-row action buttons (rename / delete for owned lists, unsubscribe
+  for shared lists) with confirmation dialogs.
 - `src/app/lists.tsx` — the Expo Router route, auth-gated.
 - `src/services/caldav/collections.ts` — `createCalendar` issues an
   RFC 4791 `MKCALENDAR`. Per the RFC the request targets the URL of the
@@ -207,8 +225,7 @@ user **create** a new task list.
   success the requested URL is authoritative; a `Location` header, when
   the server sends one, wins (Nextcloud/SabreDAV sends none).
 
-Non-goals: rename / delete / unsubscribe (Phase 1.4) and list sharing
-(Phase 1.5).
+Non-goals: list sharing (Phase 1.5).
 
 ## Data safety principles
 

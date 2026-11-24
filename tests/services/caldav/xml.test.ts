@@ -1,4 +1,9 @@
-import { firstText, parseMultistatus, textList } from '@/services/caldav/xml';
+import {
+  firstText,
+  parseMultistatus,
+  parsePropPatchPropStats,
+  textList,
+} from '@/services/caldav/xml';
 
 describe('parseMultistatus', () => {
   it('parses a multistatus with the D: prefix bound to the DAV namespace', () => {
@@ -125,5 +130,45 @@ describe('textList', () => {
     expect(textList(['a', 'b'])).toEqual(['a', 'b']);
     expect(textList({ href: 'solo' })).toEqual(['solo']);
     expect(textList(undefined)).toEqual([]);
+  });
+});
+
+describe('parsePropPatchPropStats', () => {
+  it('extracts per-property statuses from a 207 PROPPATCH response', () => {
+    const xml = `<?xml version="1.0"?>
+    <D:multistatus xmlns:D="DAV:">
+      <D:response>
+        <D:href>/cal/</D:href>
+        <D:propstat>
+          <D:prop><D:displayname/></D:prop>
+          <D:status>HTTP/1.1 200 OK</D:status>
+        </D:propstat>
+      </D:response>
+    </D:multistatus>`;
+    const entries = parsePropPatchPropStats(xml);
+    expect(entries).toEqual([{ property: 'displayname', status: 200 }]);
+  });
+
+  it('reports a 403 propstat for a refused property', () => {
+    const xml = `<?xml version="1.0"?>
+    <D:multistatus xmlns:D="DAV:">
+      <D:response>
+        <D:href>/cal/</D:href>
+        <D:propstat>
+          <D:prop><D:displayname/></D:prop>
+          <D:status>HTTP/1.1 403 Forbidden</D:status>
+        </D:propstat>
+      </D:response>
+    </D:multistatus>`;
+    const entries = parsePropPatchPropStats(xml);
+    expect(entries).toEqual([{ property: 'displayname', status: 403 }]);
+  });
+
+  it('returns an empty array for invalid XML', () => {
+    expect(parsePropPatchPropStats('not xml')).toEqual([]);
+  });
+
+  it('returns an empty array for a non-multistatus document', () => {
+    expect(parsePropPatchPropStats('<D:ok xmlns:D="DAV:">')).toEqual([]);
   });
 });
