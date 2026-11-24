@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -13,9 +13,10 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { CreateCalendarDeps } from '@/services/caldav/collections';
+import type { CalendarShare, SharePrincipal } from '@/services/caldav/sharing';
 import type { CalDAVCalendar } from '@/services/caldav/types';
 import type { AuthSession } from '@/services/nextcloud/types';
-import { useLists } from './use-lists';
+import { useLists, type UseListsResult } from './use-lists';
 
 interface ListsScreenProps {
   session: AuthSession;
@@ -29,6 +30,7 @@ type Dialog =
   | { kind: 'rename'; calendar: CalDAVCalendar }
   | { kind: 'delete'; calendar: CalDAVCalendar }
   | { kind: 'unsubscribe'; calendar: CalDAVCalendar }
+  | { kind: 'share'; calendar: CalDAVCalendar }
   | null;
 
 function toCredentials(session: AuthSession) {
@@ -37,6 +39,19 @@ function toCredentials(session: AuthSession) {
     loginName: session.loginName,
     appPassword: session.appPassword,
   };
+}
+
+/**
+ * A short share-state line for an owned list, or `null` when the list has no
+ * shares (the share list is loaded lazily when the share dialog opens, so an
+ * empty array means "nothing to show yet").
+ */
+function shareSubtitle(shares: CalendarShare[]): string | null {
+  if (shares.length === 0) {
+    return null;
+  }
+  const n = shares.length;
+  return `Shared with ${n} ${n === 1 ? 'person' : 'people'}`;
 }
 
 /**
@@ -66,6 +81,9 @@ export function ListsScreen({ session, options }: ListsScreenProps) {
   const openRename = (calendar: CalDAVCalendar) => {
     setDraftName(calendar.displayName);
     setDialog({ kind: 'rename', calendar });
+  };
+  const openShare = (calendar: CalDAVCalendar) => {
+    setDialog({ kind: 'share', calendar });
   };
 
   if (lists.status === 'loading') {
@@ -134,8 +152,10 @@ export function ListsScreen({ session, options }: ListsScreenProps) {
               <ListRow
                 key={calendar.url}
                 name={calendar.displayName}
+                subtitle={shareSubtitle(lists.getShares(calendar.url))}
                 busy={busy}
                 onRename={() => openRename(calendar)}
+                onShare={lists.sharingSupported ? () => openShare(calendar) : undefined}
                 onDelete={() => setDialog({ kind: 'delete', calendar })}
               />
             ))}
@@ -278,6 +298,10 @@ export function ListsScreen({ session, options }: ListsScreenProps) {
           }}
         />
       )}
+
+      {dialog?.kind === 'share' && (
+        <ShareDialog lists={lists} calendar={dialog.calendar} onClose={closeDialog} />
+      )}
     </SafeAreaView>
   );
 }
@@ -298,21 +322,35 @@ function Section({ title, children }: SectionProps) {
 
 interface ListRowProps {
   name: string;
-  subtitle?: string;
+  subtitle?: string | null;
   busy: boolean;
   onRename?: () => void;
+  onShare?: () => void;
   onDelete?: () => void;
   onUnsubscribe?: () => void;
 }
 
-function ListRow({ name, subtitle, busy, onRename, onDelete, onUnsubscribe }: ListRowProps) {
+function ListRow({
+  name,
+  subtitle,
+  busy,
+  onRename,
+  onShare,
+  onDelete,
+  onUnsubscribe,
+}: ListRowProps) {
   const hasActions =
-    onRename !== undefined || onDelete !== undefined || onUnsubscribe !== undefined;
+    onRename !== undefined ||
+    onShare !== undefined ||
+    onDelete !== undefined ||
+    onUnsubscribe !== undefined;
   return (
     <View style={styles.row} accessibilityRole="listitem" accessibilityLabel={name}>
       <View style={styles.rowText}>
         <Text style={styles.rowName}>{name}</Text>
-        {subtitle !== undefined && <Text style={styles.rowSubtitle}>{subtitle}</Text>}
+        {subtitle !== undefined && subtitle !== null && (
+          <Text style={styles.rowSubtitle}>{subtitle}</Text>
+        )}
       </View>
       {hasActions && (
         <View style={styles.rowActions}>
@@ -322,6 +360,14 @@ function ListRow({ name, subtitle, busy, onRename, onDelete, onUnsubscribe }: Li
               accessibilityLabel={`Rename ${name}`}
               disabled={busy}
               onPress={onRename}
+            />
+          )}
+          {onShare !== undefined && (
+            <RowButton
+              label="Share"
+              accessibilityLabel={`Share ${name}`}
+              disabled={busy}
+              onPress={onShare}
             />
           )}
           {onUnsubscribe !== undefined && (
@@ -490,6 +536,189 @@ function DialogButton({
         {label}
       </Text>
     </Pressable>
+  );
+}
+
+interface ShareDialogProps {
+  lists: UseListsResult;
+  calendar: CalDAVCalendar;
+  onClose: () => void;
+}
+
+/**
+ * Manage sharing for one owned list (Phase 1.5). Loads the current shares,
+ * lets the user search for shareable users/groups and add them, change a
+ * share's access level, or revoke it. Only rendered when the server advertises
+ * the `oc-resource-sharing` capability (the parent gates the entry point).
+ */
+function ShareDialog({ lists, calendar, onClose }: ShareDialogProps) {
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<SharePrincipal[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+
+  const shares = lists.getShares(calendar.url);
+
+  // Load (or reload) this calendar's shares when the dialog opens.
+  useEffect(() => {
+    void lists.refreshShares(calendar.url);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [calendar.url]);
+
+  const runSearch = () => {
+    const trimmed = query.trim();
+    if (trimmed === '' || isSearching) {
+      return;
+    }
+    setIsSearching(true);
+    void lists.searchSharePrincipals(trimmed).then((found) => {
+      setResults(found);
+      setIsSearching(false);
+    });
+  };
+
+  const addShare = (principal: SharePrincipal) => {
+    void lists.shareCalendar(calendar.url, principal.principal, 'read').then((ok) => {
+      if (ok) {
+        setQuery('');
+        setResults([]);
+      }
+    });
+  };
+
+  const toggleAccess = (share: CalendarShare) => {
+    const next = share.access === 'read' ? 'read-write' : 'read';
+    void lists.updateShareAccess(calendar.url, share.principal, next);
+  };
+
+  const removeShare = (share: CalendarShare) => {
+    void lists.revokeShare(calendar.url, share.principal);
+  };
+
+  return (
+    <DialogShell
+      title={`Share “${calendar.displayName}”`}
+      error={lists.shareError}
+      actions={
+        <DialogButton label="Done" accessibilityLabel="Close share dialog" onPress={onClose} />
+      }
+    >
+      <View style={styles.shareSection}>
+        <Text style={styles.shareSectionTitle}>
+          {shares.length === 0 ? 'Not shared yet' : 'Shared with'}
+        </Text>
+        {shares.length === 0 ? (
+          <Text style={styles.shareEmpty}>Add a person or group below to share this list.</Text>
+        ) : (
+          <View style={styles.shareList}>
+            {shares.map((share) => (
+              <ShareRow
+                key={share.principal}
+                name={share.displayName ?? 'Unknown'}
+                access={share.access}
+                busy={lists.isSharing}
+                onToggle={() => toggleAccess(share)}
+                onRemove={() => removeShare(share)}
+              />
+            ))}
+          </View>
+        )}
+      </View>
+
+      <View style={styles.shareSearch}>
+        <View style={styles.shareSearchInputRow}>
+          <TextInput
+            accessibilityLabel="Search people or groups to share with"
+            style={styles.shareSearchInput}
+            placeholder="Search people or groups"
+            placeholderTextColor="#9ca3af"
+            value={query}
+            onChangeText={setQuery}
+            autoCorrect={false}
+            returnKeyType="search"
+            onSubmitEditing={runSearch}
+          />
+          <RowButton
+            label="Search"
+            accessibilityLabel="Search people or groups"
+            disabled={query.trim() === '' || isSearching || lists.isSharing}
+            onPress={runSearch}
+          />
+        </View>
+
+        {isSearching && (
+          <View style={styles.shareSearchStatus} accessibilityLiveRegion="polite">
+            <ActivityIndicator size="small" />
+          </View>
+        )}
+
+        {!isSearching && results.length > 0 && (
+          <View style={styles.shareResults}>
+            {results.map((principal) => (
+              <SearchResultRow
+                key={principal.principal}
+                name={principal.displayName}
+                kind={principal.kind}
+                busy={lists.isSharing}
+                onAdd={() => addShare(principal)}
+              />
+            ))}
+          </View>
+        )}
+      </View>
+    </DialogShell>
+  );
+}
+
+interface ShareRowProps {
+  name: string;
+  access: 'read' | 'read-write';
+  busy: boolean;
+  onToggle: () => void;
+  onRemove: () => void;
+}
+
+function ShareRow({ name, access, busy, onToggle, onRemove }: ShareRowProps) {
+  const label = access === 'read' ? 'Read-only' : 'Read-write';
+  return (
+    <View style={styles.shareRow} accessibilityRole="listitem" accessibilityLabel={name}>
+      <Text style={styles.shareRowName}>{name}</Text>
+      <View style={styles.shareRowActions}>
+        <RowButton
+          label={label}
+          accessibilityLabel={`Toggle access for ${name}, currently ${label}`}
+          disabled={busy}
+          onPress={onToggle}
+        />
+        <RowButton
+          label="Remove"
+          accessibilityLabel={`Remove ${name}`}
+          destructive
+          disabled={busy}
+          onPress={onRemove}
+        />
+      </View>
+    </View>
+  );
+}
+
+interface SearchResultRowProps {
+  name: string;
+  kind: 'user' | 'group' | 'room' | 'resource' | 'other';
+  busy: boolean;
+  onAdd: () => void;
+}
+
+function SearchResultRow({ name, kind, busy, onAdd }: SearchResultRowProps) {
+  return (
+    <View style={styles.shareRow} accessibilityRole="listitem" accessibilityLabel={name}>
+      <Text style={styles.shareRowName}>
+        {name}
+        {kind !== 'other' ? ` (${kind})` : ''}
+      </Text>
+      <View style={styles.shareRowActions}>
+        <RowButton label="Add" accessibilityLabel={`Add ${name}`} disabled={busy} onPress={onAdd} />
+      </View>
+    </View>
   );
 }
 
@@ -678,5 +907,61 @@ const styles = StyleSheet.create({
   },
   dialogButtonTextInverse: {
     color: '#ffffff',
+  },
+  shareSection: {
+    gap: 8,
+  },
+  shareSectionTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#6b7280',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  shareEmpty: {
+    fontSize: 14,
+    color: '#6b7280',
+  },
+  shareList: {
+    gap: 8,
+  },
+  shareRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  shareRowName: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  shareRowActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  shareSearch: {
+    gap: 8,
+  },
+  shareSearchInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  shareSearchInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 15,
+  },
+  shareSearchStatus: {
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  shareResults: {
+    gap: 8,
   },
 });

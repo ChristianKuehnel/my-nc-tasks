@@ -91,7 +91,13 @@ describe('parseMultistatus', () => {
 
   it('rejects invalid XML and non-multistatus documents', () => {
     expect(() => parseMultistatus('this is not xml')).toThrow();
-    expect(() => parseMultistatus('<D:multistatus xmlns:D="DAV:">')).toThrow(/multistatus/);
+    expect(() => parseMultistatus('<D:propfind xmlns:D="DAV:"><D:prop/></D:propfind>')).toThrow(
+      /multistatus/,
+    );
+  });
+
+  it('treats an empty multistatus as zero responses', () => {
+    expect(parseMultistatus('<D:multistatus xmlns:D="DAV:"></D:multistatus>')).toEqual([]);
   });
 
   it('rejects response entries without an href', () => {

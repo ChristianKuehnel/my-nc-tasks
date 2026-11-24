@@ -163,6 +163,46 @@ screen. For each operation, verify:
   stays open and shows a network error message; the list state is
   unchanged.
 
+### Phase 1.5: verifying list sharing
+
+List sharing is **capability-gated**: the **Share** action only appears when
+the server advertises the `oc-resource-sharing` CalDAV extension in the
+`DAV:` response header. Verify the gate first:
+
+- **Capability detection:** sign in against a server that _does not_ support
+  the sharing extension — the **Share** button must be absent on owned lists.
+  Against a server that does (e.g. the NC 35 test server), the **Share**
+  button appears on owned lists only.
+
+In Expo Go, with a sharing-capable server:
+
+**View + share:**
+
+1. Tap **Share** on an owned list — the dialog opens and loads the current
+   share list from the server.
+2. Search for a user or group — matching sharees appear with a type label
+   (e.g. “(group)”). Tap **Add** on one — the share is created and the
+   share list refreshes to show the new sharee.
+3. A “Shared with N people” line appears under the list row.
+
+**Change access + remove:**
+
+1. In the dialog, tap a sharee’s **Read-only** / **Read-write** button — the
+   access level toggles and the list refreshes.
+2. Tap **Remove** on a sharee — the share is revoked and the list refreshes.
+
+**Real-server note (single-account limitation):** sharing a calendar with the
+_own_ account is a silent server no-op, so a single-account test cannot show
+a visible share created by the app itself. To verify end-to-end, create the
+share from the Web UI (or a second account) and confirm it appears in the
+app; then toggle/remove it from the app and confirm the server-side change.
+
+**Error surfacing:**
+
+- A `403` (refused) or `501` (unsupported) from the sharing endpoint keeps
+  the dialog open, shows a share error message, and leaves the previous share
+  list unchanged.
+
 ### On the simulator (macOS only)
 
 Not part of the standard workflow (Linux-only development is the goal), but

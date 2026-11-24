@@ -49,7 +49,7 @@ Phase 1 may proceed.
 | 1.2  | CalDAV discovery (principals, calendar home, VTODO calendars, permissions)  | done        |
 | 1.3  | List browsing and create (owned + shared, empty/loading/error states)       | in progress |
 | 1.4  | Rename / delete / unsubscribe (safe, permission-aware)                      | planned     |
-| 1.5  | List sharing (Nextcloud DAV sharing extensions, capability detection)       | planned     |
+| 1.5  | List sharing (Nextcloud DAV sharing extensions, capability detection)       | in progress |
 | 1.6  | Phase 1 integration hardening (e2e paths, compatibility matrix)             | planned     |
 
 ## Phase 2 — Task operations and Reminders-inspired UI

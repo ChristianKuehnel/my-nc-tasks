@@ -47,12 +47,29 @@ export interface CalDAVCalendar {
   canWrite: boolean;
 }
 
+/**
+ * Server capabilities detected from the DAV feature header (the `DAV:`
+ * response header advertised by Nextcloud/SabreDAV).
+ */
+export interface CalDAVCapabilities {
+  /**
+   * The server supports resource sharing via the `oc-resource-sharing`
+   * extension (this app's sharing protocol). When `false`, the sharing UI
+   * must stay hidden — the server will reject share requests.
+   */
+  sharing: boolean;
+}
+
 /** Result of a full discovery run. */
 export interface DiscoveredCalendars {
   /** Absolute principal URL of the authenticated user. */
   principalUrl: string;
   /** Absolute calendar home set URL. */
   homeSetUrl: string;
+  /** Absolute DAV collection root URL (target of principal search). */
+  davRootUrl: string;
   /** All calendars in the home set (owned and shared), in server order. */
   calendars: CalDAVCalendar[];
+  /** Capabilities detected from the server's DAV feature header. */
+  capabilities: CalDAVCapabilities;
 }

@@ -25,7 +25,12 @@
  */
 
 import { CalDAVError, webdavRequest } from './http';
-import type { CalDAVCalendar, CalDAVCredentials, DiscoveredCalendars } from './types';
+import type {
+  CalDAVCalendar,
+  CalDAVCapabilities,
+  CalDAVCredentials,
+  DiscoveredCalendars,
+} from './types';
 import { ATTR_PREFIX, firstText, parseMultistatus, textList } from './xml';
 
 export interface DiscoveryDeps {
@@ -35,6 +40,33 @@ export interface DiscoveryDeps {
 
 const WELL_KNOWN_PATH = '/.well-known/carddav/';
 const DAV_ROOT_PATH = '/remote.php/dav/';
+
+/**
+ * Parse the DAV feature header (the `DAV:` response header) into app-level
+ * capabilities.
+ *
+ * Sharing is supported when the server advertises Nextcloud's
+ * `oc-resource-sharing` extension — the protocol this app's share requests
+ * use — or the generic `calendarserver-sharing` token. Version tokens
+ * (`1`, `2`, …) and unknown tokens are ignored. A missing/empty header
+ * yields all-`false`, which keeps the sharing UI hidden rather than sending
+ * requests the server would reject.
+ */
+export function parseDavFeatures(davHeader: string | null): CalDAVCapabilities {
+  const features = (davHeader ?? '')
+    .split(',')
+    .map((token) => token.trim().toLowerCase())
+    .filter((token) => token !== '');
+  return {
+    sharing:
+      features.includes('oc-resource-sharing') || features.includes('calendarserver-sharing'),
+  };
+}
+
+/** Absolute URL of the DAV collection root for a server base URL. */
+export function davRootUrl(serverUrl: string): string {
+  return `${serverUrl}${DAV_ROOT_PATH}`;
+}
 
 /**
  * CalDAV properties use the RFC 4791 namespace
@@ -368,8 +400,8 @@ async function listCalendars(
   deps: DiscoveryDeps,
   homeSetUrl: string,
   ownPrincipalUrl: string,
-): Promise<CalDAVCalendar[]> {
-  const { body } = await webdavRequest({
+): Promise<{ calendars: CalDAVCalendar[]; davHeader: string | null }> {
+  const { body, headers } = await webdavRequest({
     credentials,
     method: 'PROPFIND',
     url: homeSetUrl,
@@ -380,7 +412,7 @@ async function listCalendars(
   });
 
   const normalizedHome = canonicalUrl(homeSetUrl, credentials.serverUrl);
-  return parseMultistatus(body)
+  const calendars = parseMultistatus(body)
     .filter((response) => canonicalUrl(response.href, credentials.serverUrl) !== normalizedHome)
     .map((response) => {
       const url = canonicalUrl(response.href, credentials.serverUrl);
@@ -408,6 +440,8 @@ async function listCalendars(
         canWrite: privileges.has('write'),
       };
     });
+
+  return { calendars, davHeader: headers['dav'] ?? null };
 }
 
 /**
@@ -422,6 +456,17 @@ export async function discoverCalendars(
   const probe =
     (await probeWellKnown(credentials, deps)) ?? (await probeDavRoot(credentials, deps));
   const homeSetUrl = await ensureHomeSet(credentials, deps, probe.principalUrl, probe.homeSetUrl);
-  const calendars = await listCalendars(credentials, deps, homeSetUrl, probe.principalUrl);
-  return { principalUrl: probe.principalUrl, homeSetUrl, calendars };
+  const { calendars, davHeader } = await listCalendars(
+    credentials,
+    deps,
+    homeSetUrl,
+    probe.principalUrl,
+  );
+  return {
+    principalUrl: probe.principalUrl,
+    homeSetUrl,
+    davRootUrl: davRootUrl(credentials.serverUrl),
+    calendars,
+    capabilities: parseDavFeatures(davHeader),
+  };
 }

@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react-native';
 
 import type { CalDAVCalendar } from '@/services/caldav/types';
+import type { SharePrincipal } from '@/services/caldav/sharing';
 import type { AuthSession } from '@/services/nextcloud/types';
 import { useLists, type UseListsResult } from '@/features/lists/use-lists';
 import { ListsScreen } from '@/features/lists/lists-screen';
@@ -52,6 +53,15 @@ function listsResult(overrides: Partial<UseListsResult>): UseListsResult {
     createError: null,
     isMutating: false,
     mutationError: null,
+    sharingSupported: false,
+    isSharing: false,
+    shareError: null,
+    getShares: jest.fn(() => []),
+    refreshShares: jest.fn(async () => undefined),
+    searchSharePrincipals: jest.fn(async () => []),
+    shareCalendar: jest.fn(async () => true),
+    updateShareAccess: jest.fn(async () => true),
+    revokeShare: jest.fn(async () => true),
     refresh: jest.fn(),
     createList: jest.fn(async () => true),
     renameList: jest.fn(async () => true),
@@ -223,5 +233,86 @@ describe('ListsScreen', () => {
 
     await fireEvent.press(screen.getByLabelText('Confirm unsubscribe from list'));
     expect(unsubscribeList).toHaveBeenCalledWith(READONLY_SHARED.url);
+  });
+
+  it('offers the Share action only when the server supports sharing', async () => {
+    await renderScreen();
+    expect(screen.queryByLabelText('Share Tasks')).toBeNull();
+
+    await renderScreen({ sharingSupported: true });
+    expect(screen.getByLabelText('Share Tasks')).toBeDefined();
+  });
+
+  it('shows a share subtitle on owned rows that have shares', async () => {
+    await renderScreen({
+      getShares: jest.fn((url: string) =>
+        url === TASKS.url
+          ? [
+              { principal: 'principal:principals/users/bob', displayName: 'Bob', access: 'read' },
+              {
+                principal: 'principal:principals/groups/team',
+                displayName: null,
+                access: 'read-write',
+              },
+            ]
+          : [],
+      ),
+    });
+    expect(screen.getByText('Shared with 2 people')).toBeDefined();
+  });
+
+  it('opens the share dialog, loads the shares, and lets you add a sharee', async () => {
+    const shareCalendar = jest.fn(async () => true);
+    const refreshShares = jest.fn(async () => undefined);
+    const searchSharePrincipals = jest.fn(async (): Promise<SharePrincipal[]> => [
+      { principal: 'principal:principals/users/bob', displayName: 'Bob Builder', kind: 'user' },
+    ]);
+    await renderScreen({
+      sharingSupported: true,
+      shareCalendar,
+      refreshShares,
+      searchSharePrincipals,
+    });
+
+    await fireEvent.press(screen.getByLabelText('Share Tasks'));
+    expect(screen.getByText('Share “Tasks”')).toBeDefined();
+    expect(refreshShares).toHaveBeenCalledWith(TASKS.url);
+
+    await fireEvent.changeText(
+      screen.getByLabelText('Search people or groups to share with'),
+      'bob',
+    );
+    await fireEvent.press(screen.getByLabelText('Search people or groups'));
+    expect(searchSharePrincipals).toHaveBeenCalledWith('bob');
+
+    await fireEvent.press(screen.getByLabelText('Add Bob Builder'));
+    expect(shareCalendar).toHaveBeenCalledWith(TASKS.url, 'principal:principals/users/bob', 'read');
+  });
+
+  it('toggles a share’s access level and removes shares', async () => {
+    const updateShareAccess = jest.fn(async () => true);
+    const revokeShare = jest.fn(async () => true);
+    await renderScreen({
+      sharingSupported: true,
+      getShares: jest.fn((url: string) =>
+        url === TASKS.url
+          ? [{ principal: 'principal:principals/users/bob', displayName: 'Bob', access: 'read' }]
+          : [],
+      ),
+      updateShareAccess,
+      revokeShare,
+    });
+
+    await fireEvent.press(screen.getByLabelText('Share Tasks'));
+
+    await fireEvent.press(screen.getByLabelText('Toggle access for Bob, currently Read-only'));
+    expect(updateShareAccess).toHaveBeenCalledWith(
+      TASKS.url,
+      'principal:principals/users/bob',
+      'read-write',
+    );
+
+    await fireEvent.press(screen.getByLabelText('Remove Bob'));
+    expect(revokeShare).toHaveBeenCalledWith(TASKS.url, 'principal:principals/users/bob');
   });
 });

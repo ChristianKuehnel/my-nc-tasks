@@ -227,6 +227,66 @@ owner’s data is never touched from this screen.
 
 Non-goals: list sharing (Phase 1.5).
 
+## List sharing (Phase 1.5)
+
+List sharing (issue #18) is built on the Nextcloud/ownCloud CalDAV sharing
+extension, **not** on the W3C/Apple `calendarserver-sharing` protocol. The
+server exposes two signals that the client checks before offering any sharing
+UI:
+
+- The `DAV:` response header from the calendar-home `PROPFIND` advertises the
+  `oc-resource-sharing` token (and, on newer servers,
+  `calendarserver-sharing`). `discoverCalendars` parses this header into a
+  `CalDAVCapabilities` object; `parseDavFeatures` is the tolerant
+  case/whitespace-insensitive tokenizer. When the header is absent or empty,
+  `capabilities.sharing` is `false` and the **Share** action is hidden, so the
+  UI never offers a feature the server cannot serve.
+- `discoverCalendars` also returns `davRootUrl` (`{server}/remote.php/dav/`),
+  the target for the sharee `REPORT` search.
+
+The client speaks the `http://owncloud.org/ns` (`oc:`) dialect:
+
+- **Read shares** — `listShares` `PROPFIND`s the calendar for
+  `{oc}invite`. Nextcloud returns `200` with an empty `<oc:invite/>` when a
+  calendar is unshared, so an empty/absent property maps to `[]` rather than
+  an error. Each `<oc:user>` carries the sharee `DAV:href`, an optional
+  `oc:common-name`, and an `oc:access` block whose presence of
+  `oc:read-write` (vs. `oc:read`) determines the access level.
+- **Write shares** — `updateShares` `POST`s an `oc:share` document to the
+  calendar URL. `oc:set` entries add or change a share (presence of
+  `oc:read-write` ⇒ read-write, absence ⇒ read-only); `oc:remove` entries
+  revoke. Nextcloud self-shares (sharee == owner) are a silent no-op. Batches
+  larger than ten set+remove operations are rejected client-side before any
+  request is sent (the server answers `400`).
+- **Search sharees** — `searchPrincipals` issues a DAV
+  `principal-property-search` `REPORT` against `davRootUrl`, matching
+  `D:displayname` (prefix) and `s:email-address`. Results are mapped to
+  `SharePrincipal` with a `kind` (`user` / `group` / `room` / `resource` /
+  `other`) derived from the principal collection path.
+
+A key wire-format detail: the server resolves a sharee through `findByUri`,
+which understands only `principal:` and `mailto:` URIs — a raw DAV path
+resolves to nothing and the sharee is **silently skipped** (`continue`). The
+`oc:invite` property reports sharees in the `principal:principals/...` form,
+but the sharee search reports DAV paths in `principal-URL`. `toPrincipalUri`
+therefore normalizes both sources to the `principal:` form (applied in
+`searchPrincipals` and again as a safety net in `updateShares`), so every
+`oc:set` / `oc:remove` href is resolvable.
+
+`src/services/caldav/sharing.ts` is the pure service layer
+(`listShares`, `updateShares`, `searchPrincipals`, and the pure
+`buildShareRequestXml` serializer); `src/features/lists/use-lists.ts` adds
+the state (`sharingSupported`, a per-calendar `shares` map, `isSharing`,
+`shareError`) and the callbacks (`refreshShares`, `searchSharePrincipals`,
+`shareCalendar`, `updateShareAccess`, `revokeShare`). Share mutations
+re-fetch only that calendar's shares (no full re-discovery) and are guarded
+so only one share operation is in flight at a time. `lists-screen.tsx` adds a
+`Share` action (owned rows, capability-gated) that opens a `ShareDialog`
+to view/add/toggle-access/remove shares and to search for sharees.
+
+Non-goals: sharing task items (not lists), circle/room sharee selection
+beyond display, and optimistic share state (the server is always re-read).
+
 ## Data safety principles
 
 - iCalendar `VTODO` data round-trips must preserve UIDs, unknown properties,
