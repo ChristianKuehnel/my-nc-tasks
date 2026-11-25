@@ -340,6 +340,22 @@ already used by the task or defined in its `VTIMEZONE`; it does not generate
 time zone definitions. `DURATION`, alarms, and unrelated metadata are kept
 intact. Task editor controls and recurrence editing are out of scope.
 
+## Subtasks and task moves (Phase 2.4)
+
+Tasks expose `RELATED-TO` links by UID; an omitted `RELTYPE` means
+`PARENT`. Parent edits affect only that link. They check for missing
+ancestors, ambiguous links, and cycles in the current list before a
+conditional write. Ancestor checks are snapshots, not a server-side
+transaction across resources.
+
+Cross-list moves use one same-server WebDAV `MOVE`, with `If-Match` and
+`Overwrite: F`; there is no copy/delete fallback. Moves currently accept
+only non-recurring tasks with no outgoing links or incoming links visible
+in the source list. This avoids splitting known relationships. Moves of
+entire subtrees, cross-list link discovery, and the task UI are out of
+scope. Destination UID collisions are checked before the move; the
+server is authoritative for concurrent writes and permissions.
+
 ## Data safety principles
 
 - iCalendar `VTODO` data round-trips must preserve UIDs, unknown properties,
