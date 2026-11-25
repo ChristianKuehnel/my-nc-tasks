@@ -309,8 +309,23 @@ Serializing an existing resource returns its original text, preserving
 recurrence rules and exceptions, alarms, time-zone definitions, subtask
 relationships, and extension properties. Creating a new task generates
 a minimal `VCALENDAR` from a caller-supplied UID, UTC timestamp, and
-escaped summary. Editing existing resources, CalDAV task writes, and the
-task UI are not part of this codec.
+escaped summary.
+
+## Basic task CRUD (Phase 2.2)
+
+`src/services/caldav/tasks.ts` queries a single collection for VTODO
+resources and fetches each original body and its ETag together with `GET`.
+This avoids using a REPORT snapshot's ETag for a separately fetched body.
+Only direct children of the selected collection are accepted. Reads and
+writes use the discovered privileges; the server is still authoritative.
+
+Creation sends `If-None-Match: *`; updates and deletes require a strong
+ETag and send `If-Match`. A `412` is a conflict and is never retried
+unconditionally. Read the task again before another mutation. Summary and
+completion changes replace only the relevant top-level properties,
+preserving other lines, alarms, and extensions. Basic edits and deletes
+refuse recurring resources. Task UI, metadata editing, recurrence editing,
+and bulk synchronization are separate work.
 
 ## Data safety principles
 

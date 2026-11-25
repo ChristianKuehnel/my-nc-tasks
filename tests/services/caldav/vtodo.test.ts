@@ -56,6 +56,7 @@ describe('VTODO resources', () => {
         start: { kind: 'zoned', value: '2026-10-23T09:00:00', tzid: 'Europe/Berlin' },
         due: { kind: 'zoned', value: '2026-10-23T10:00:00', tzid: 'Europe/Berlin' },
         recurrenceId: null,
+        completed: false,
       },
       {
         uid: 'reading@example.test',
@@ -63,6 +64,7 @@ describe('VTODO resources', () => {
         start: { kind: 'floating', value: '2026-10-25T11:00:00' },
         due: { kind: 'utc', value: '2026-10-25T13:00:00Z' },
         recurrenceId: { kind: 'zoned', value: '2026-10-25T09:00:00', tzid: 'Europe/Berlin' },
+        completed: false,
       },
     ]);
     expect(parsed.serialize()).toBe(recurringTask);

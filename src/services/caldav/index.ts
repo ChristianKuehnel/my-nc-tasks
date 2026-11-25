@@ -4,6 +4,9 @@ export { discoverCalendars, parseDavFeatures, davRootUrl } from './discovery';
 export type { DiscoveryDeps } from './discovery';
 export { buildMkCalendarBody, calendarSlug, createCalendar } from './collections';
 export type { CreateCalendarDeps, CreateCalendarResult } from './collections';
+export { listTasks, readTask, createTask, updateTask, deleteTask } from './tasks';
+export type { DavTask } from './tasks';
+export type { BasicTaskChange, TaskOccurrence, TaskTime, VTodoResource } from './vtodo';
 export { buildShareRequestXml, listShares, updateShares, searchPrincipals } from './sharing';
 export type {
   SharingDeps,
