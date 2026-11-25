@@ -55,6 +55,10 @@ function listsResult(overrides: Partial<UseListsResult>): UseListsResult {
     createList: jest.fn(async () => true),
     renameList: jest.fn(async () => true),
     deleteList: jest.fn(async () => true),
+    trashSupported: false,
+    trashed: [],
+    trashList: jest.fn(async () => true),
+    restoreList: jest.fn(async () => true),
     unsubscribeList: jest.fn(async () => true),
     ...overrides,
   };

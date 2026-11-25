@@ -29,6 +29,7 @@ type Dialog =
   | { kind: 'create' }
   | { kind: 'rename'; calendar: CalDAVCalendar }
   | { kind: 'delete'; calendar: CalDAVCalendar }
+  | { kind: 'trash' | 'restore'; calendar: CalDAVCalendar }
   | { kind: 'unsubscribe'; calendar: CalDAVCalendar }
   | { kind: 'share'; calendar: CalDAVCalendar }
   | null;
@@ -57,15 +58,14 @@ function shareSubtitle(shares: CalendarShare[]): string | null {
 /**
  * Task list overview (Phases 1.3 + 1.4): owned and shared VTODO calendars
  * with empty/loading/error states, a create flow (MKCALENDAR), and safe
- * mutations — rename (PROPPATCH), delete (owned only, no trashbin), and
- * unsubscribe (shared only, removes the share). Every mutation is guarded by
- * a confirmation dialog and permission-aware: owned lists offer rename +
- * delete, shared lists offer only unsubscribe, so a shared owner's data is
- * never touched from this screen.
+ * mutations. Owned lists can be renamed and moved to Trash on supported
+ * servers, or explicitly deleted where Trash is unavailable. Shared lists
+ * can only be unsubscribed, without changing the owner's data.
  */
 export function ListsScreen({ session, options }: ListsScreenProps) {
   const lists = useLists(toCredentials(session), options);
   const [dialog, setDialog] = useState<Dialog>(null);
+  const [showTrash, setShowTrash] = useState(false);
   const [draftName, setDraftName] = useState('');
 
   const busy = lists.isCreating || lists.isMutating;
@@ -138,42 +138,79 @@ export function ListsScreen({ session, options }: ListsScreenProps) {
           </Pressable>
         </View>
 
-        {!hasLists && (
-          <View style={styles.empty}>
-            <Text style={styles.emptyText}>
-              No task lists yet. Create your first list to get started.
-            </Text>
-          </View>
+        {lists.trashSupported && (
+          <RowButton
+            label={showTrash ? 'Back to task lists' : 'Trash'}
+            accessibilityLabel={showTrash ? 'Back to task lists' : 'Open Trash'}
+            disabled={busy}
+            onPress={() => {
+              if (!showTrash) lists.refresh();
+              setShowTrash(!showTrash);
+            }}
+          />
         )}
 
-        {lists.owned.length > 0 && (
-          <Section title="My lists">
-            {lists.owned.map((calendar) => (
+        {lists.trashSupported && showTrash ? (
+          <Section title="Trash">
+            {lists.trashed.length === 0 && <Text style={styles.emptyText}>Trash is empty.</Text>}
+            {lists.trashed.map((calendar) => (
               <ListRow
                 key={calendar.url}
                 name={calendar.displayName}
-                subtitle={shareSubtitle(lists.getShares(calendar.url))}
                 busy={busy}
-                onRename={() => openRename(calendar)}
-                onShare={lists.sharingSupported ? () => openShare(calendar) : undefined}
-                onDelete={() => setDialog({ kind: 'delete', calendar })}
+                onRestore={() => setDialog({ kind: 'restore', calendar })}
               />
             ))}
           </Section>
-        )}
+        ) : (
+          <>
+            {!hasLists && (
+              <View style={styles.empty}>
+                <Text style={styles.emptyText}>
+                  No task lists yet. Create your first list to get started.
+                </Text>
+              </View>
+            )}
 
-        {lists.shared.length > 0 && (
-          <Section title="Shared with me">
-            {lists.shared.map((calendar) => (
-              <ListRow
-                key={calendar.url}
-                name={calendar.displayName}
-                subtitle={calendar.canWrite ? 'Shared with you' : 'Shared with you · read-only'}
-                busy={busy}
-                onUnsubscribe={() => setDialog({ kind: 'unsubscribe', calendar })}
-              />
-            ))}
-          </Section>
+            {lists.owned.length > 0 && (
+              <Section title="My lists">
+                {lists.owned.map((calendar) => (
+                  <ListRow
+                    key={calendar.url}
+                    name={calendar.displayName}
+                    subtitle={shareSubtitle(lists.getShares(calendar.url))}
+                    busy={busy}
+                    onRename={() => openRename(calendar)}
+                    onShare={lists.sharingSupported ? () => openShare(calendar) : undefined}
+                    onTrash={
+                      lists.trashSupported && calendar.canWrite
+                        ? () => setDialog({ kind: 'trash', calendar })
+                        : undefined
+                    }
+                    onDelete={
+                      lists.trashSupported
+                        ? undefined
+                        : () => setDialog({ kind: 'delete', calendar })
+                    }
+                  />
+                ))}
+              </Section>
+            )}
+
+            {lists.shared.length > 0 && (
+              <Section title="Shared with me">
+                {lists.shared.map((calendar) => (
+                  <ListRow
+                    key={calendar.url}
+                    name={calendar.displayName}
+                    subtitle={calendar.canWrite ? 'Shared with you' : 'Shared with you · read-only'}
+                    busy={busy}
+                    onUnsubscribe={() => setDialog({ kind: 'unsubscribe', calendar })}
+                  />
+                ))}
+              </Section>
+            )}
+          </>
         )}
       </ScrollView>
 
@@ -261,7 +298,7 @@ export function ListsScreen({ session, options }: ListsScreenProps) {
 
       {dialog?.kind === 'delete' && (
         <ConfirmDialog
-          title="Delete list?"
+          title="Permanently delete list?"
           message={`“${dialog.calendar.displayName}” and all of its tasks will be permanently deleted. This cannot be undone.`}
           confirmLabel={lists.isMutating ? 'Deleting…' : 'Delete'}
           confirmAccessibilityLabel="Confirm delete list"
@@ -274,6 +311,31 @@ export function ListsScreen({ session, options }: ListsScreenProps) {
               if (ok) {
                 closeDialog();
               }
+            });
+          }}
+        />
+      )}
+
+      {(dialog?.kind === 'trash' || dialog?.kind === 'restore') && (
+        <ConfirmDialog
+          title={dialog.kind === 'trash' ? 'Move list to Trash?' : 'Restore list?'}
+          message={
+            dialog.kind === 'trash'
+              ? `“${dialog.calendar.displayName}” and its tasks will move to Nextcloud Trash. You can restore them until the server removes them.`
+              : `“${dialog.calendar.displayName}” and its tasks will return to your active lists.`
+          }
+          confirmLabel={dialog.kind === 'trash' ? 'Move to Trash' : 'Restore'}
+          confirmAccessibilityLabel={
+            dialog.kind === 'trash' ? 'Confirm move to Trash' : 'Confirm restore list'
+          }
+          busy={lists.isMutating}
+          error={lists.mutationError}
+          destructive={false}
+          onCancel={closeDialog}
+          onConfirm={() => {
+            const mutate = dialog.kind === 'trash' ? lists.trashList : lists.restoreList;
+            void mutate(dialog.calendar.url).then((ok) => {
+              if (ok) closeDialog();
             });
           }}
         />
@@ -327,6 +389,8 @@ interface ListRowProps {
   onRename?: () => void;
   onShare?: () => void;
   onDelete?: () => void;
+  onTrash?: () => void;
+  onRestore?: () => void;
   onUnsubscribe?: () => void;
 }
 
@@ -337,12 +401,16 @@ function ListRow({
   onRename,
   onShare,
   onDelete,
+  onTrash,
+  onRestore,
   onUnsubscribe,
 }: ListRowProps) {
   const hasActions =
     onRename !== undefined ||
     onShare !== undefined ||
     onDelete !== undefined ||
+    onTrash !== undefined ||
+    onRestore !== undefined ||
     onUnsubscribe !== undefined;
   return (
     <View style={styles.row} accessibilityRole="listitem" accessibilityLabel={name}>
@@ -385,6 +453,22 @@ function ListRow({
               disabled={busy}
               destructive
               onPress={onDelete}
+            />
+          )}
+          {onTrash && (
+            <RowButton
+              label="Move to Trash"
+              accessibilityLabel={`Move ${name} to Trash`}
+              disabled={busy}
+              onPress={onTrash}
+            />
+          )}
+          {onRestore && (
+            <RowButton
+              label="Restore"
+              accessibilityLabel={`Restore ${name}`}
+              disabled={busy}
+              onPress={onRestore}
             />
           )}
         </View>

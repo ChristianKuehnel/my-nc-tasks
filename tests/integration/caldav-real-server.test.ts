@@ -83,6 +83,20 @@ const deps = { fetchImpl: nodeFetch };
     });
   }
 
+  if (NC_TEST_TRASHED_LIST_SLUG) {
+    const slug = NC_TEST_TRASHED_LIST_SLUG;
+    it('reports an owned VTODO fixture in enabled calendar Trash, not in active discovery', async () => {
+      if (!credentials) return;
+      const { homeSetUrl, calendars, trash } = await discoverCalendars(credentials, deps);
+      const url = new URL(`${encodeURIComponent(slug)}/`, homeSetUrl).href;
+      expect(trash?.lists.find((list) => list.url === url)).toMatchObject({
+        isOwned: true,
+        isTaskList: true,
+      });
+      expect(calendars.some((list) => list.url === url)).toBe(false);
+    });
+  }
+
   if (NC_TEST_READ_ONLY_SHARE_SLUG && NC_TEST_TRASHED_LIST_SLUG) {
     checkDiscoveryFixtures(NC_TEST_READ_ONLY_SHARE_SLUG, NC_TEST_TRASHED_LIST_SLUG);
   }

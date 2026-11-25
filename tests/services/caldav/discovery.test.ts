@@ -1,6 +1,7 @@
 import { discoverCalendars, parseDavFeatures, davRootUrl } from '@/services/caldav/discovery';
 import type { FetchLike } from '@/services/caldav/http';
 import type { CalDAVCredentials } from '@/services/caldav/types';
+import { changeListTrashState } from '@/services/caldav/trash';
 
 const B = 'https://cloud.example.com';
 const WELL_KNOWN = `${B}/.well-known/carddav/`;
@@ -152,6 +153,39 @@ describe('discoverCalendars', () => {
 
     expect(result.principalUrl).toBe(PRINCIPAL);
     expect(result.calendars).toHaveLength(3);
+  });
+
+  it.each([
+    ['nc-calendar-trashbin', '2592000', true],
+    ['nc-calendar-trashbin', '0', false],
+    ['nc-calendar-trashbin', '', false],
+    ['1', '2592000', false],
+  ])('gates Trash by DAV feature %s and retention %s', async (dav, seconds, supported) => {
+    const deleted = '<d:resourcetype><d:collection/><nc:deleted-calendar/></d:resourcetype>';
+    const fetchImpl = router({
+      [WELL_KNOWN]: res(207, PRINCIPAL_PROBE_BODY),
+      [HOME]: res(
+        207,
+        ms(
+          entry(
+            `${HOME}trashbin/`,
+            '<d:resourcetype><nc:trash-bin/></d:resourcetype>' +
+              `<nc:trash-bin-retention-duration>${seconds}</nc:trash-bin-retention-duration>`,
+          ),
+          entry(`${HOME}old/`, OWNERED + deleted + COMPS('VTODO')),
+          entry(`${HOME}shared/`, OWNER('/principals/users/bob/') + deleted + COMPS('VTODO')),
+          entry(`${HOME}events/`, OWNERED + deleted + COMPS('VEVENT')),
+          entry(`${HOME}active/`, OWNERED + COMPS('VTODO')),
+        ),
+        { DAV: dav },
+      ),
+    });
+
+    const result = await discoverCalendars(CREDENTIALS, { fetchImpl });
+    expect(result.calendars.map(({ url }) => url)).toEqual([`${HOME}active/`]);
+    expect(result.trash?.lists.map(({ url }) => url)).toEqual(
+      supported ? [`${HOME}old/`] : undefined,
+    );
   });
 
   it('omits trashed owned and shared calendars but keeps an active read-only share', async () => {
@@ -379,6 +413,102 @@ describe('discoverCalendars', () => {
       }
       expect(bodies.some((body) => body.includes('urn:ietf:params:xml:ns:caldav'))).toBe(true);
     });
+  });
+});
+
+describe('task list trash lifecycle', () => {
+  const url = `${HOME}tasks/`;
+  const trashbin = entry(
+    `${HOME}trashbin/`,
+    '<d:resourcetype><nc:trash-bin/></d:resourcetype>' +
+      '<nc:trash-bin-retention-duration>2592000</nc:trash-bin-retention-duration>',
+  );
+  const calendar = (deleted: boolean) =>
+    entry(
+      url,
+      OWNERED +
+        READ_WRITE +
+        COMPS('VTODO') +
+        (deleted ? '<d:resourcetype><nc:deleted-calendar/></d:resourcetype>' : ''),
+    );
+  function server(
+    initiallyDeleted: boolean,
+    finallyDeleted: boolean,
+    status = 204,
+    enabled = true,
+  ) {
+    const listing = (deleted: boolean) =>
+      res(207, ms(trashbin, calendar(deleted)), { DAV: enabled ? 'nc-calendar-trashbin' : '1' });
+    const fetchImpl = jest
+      .fn<ReturnType<FetchLike>, Parameters<FetchLike>>()
+      .mockResolvedValueOnce(res(207, PRINCIPAL_PROBE_BODY))
+      .mockResolvedValueOnce(listing(initiallyDeleted))
+      .mockResolvedValueOnce(res(status))
+      .mockResolvedValueOnce(res(207, PRINCIPAL_PROBE_BODY))
+      .mockResolvedValueOnce(listing(finallyDeleted));
+    return fetchImpl;
+  }
+
+  it('moves an owned list to Trash without bypassing retention', async () => {
+    const fetchImpl = server(false, true);
+    const result = await changeListTrashState(CREDENTIALS, url, 'trash', { fetchImpl });
+    expect(fetchImpl).toHaveBeenNthCalledWith(
+      3,
+      url,
+      expect.objectContaining({ method: 'DELETE' }),
+    );
+    expect(Object.keys(fetchImpl.mock.calls[2][1]?.headers ?? {})).not.toContain(
+      'X-NC-CalDAV-No-Trashbin',
+    );
+    expect(result.calendars).toEqual([]);
+    expect(result.trash?.lists.map((list) => list.url)).toEqual([url]);
+  });
+
+  it('restores through the Nextcloud restore target and refreshes active lists', async () => {
+    const fetchImpl = server(true, false);
+    const result = await changeListTrashState(CREDENTIALS, url, 'restore', { fetchImpl });
+    expect(fetchImpl).toHaveBeenNthCalledWith(
+      3,
+      url,
+      expect.objectContaining({
+        method: 'MOVE',
+        headers: expect.objectContaining({ Destination: `${HOME}trashbin/restore/file` }),
+      }),
+    );
+    expect(result.calendars.map((list) => list.url)).toEqual([url]);
+    expect(result.trash?.lists).toEqual([]);
+  });
+
+  it('does not send DELETE on an unsupported server', async () => {
+    const fetchImpl = server(false, false, 204, false);
+    await expect(
+      changeListTrashState(CREDENTIALS, url, 'trash', { fetchImpl }),
+    ).rejects.toMatchObject({ code: 'bad_request' });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not send MOVE if the trashed list has expired', async () => {
+    const fetchImpl = server(false, false);
+    await expect(
+      changeListTrashState(CREDENTIALS, url, 'restore', { fetchImpl }),
+    ).rejects.toMatchObject({ code: 'not_found' });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it('surfaces a denied mutation without retrying or deleting permanently', async () => {
+    const fetchImpl = server(false, false, 403);
+    await expect(
+      changeListTrashState(CREDENTIALS, url, 'trash', { fetchImpl }),
+    ).rejects.toMatchObject({ code: 'forbidden' });
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+  });
+
+  it('does not report success if the server ignored the move', async () => {
+    const fetchImpl = server(false, false);
+    await expect(
+      changeListTrashState(CREDENTIALS, url, 'trash', { fetchImpl }),
+    ).rejects.toMatchObject({ code: 'server_error' });
+    expect(fetchImpl).toHaveBeenCalledTimes(5);
   });
 });
 

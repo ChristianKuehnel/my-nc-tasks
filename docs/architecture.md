@@ -156,6 +156,14 @@ Flow (per authenticated session, RFC 6764 + RFC 4791):
    Discovery checks `DAV:resourcetype` and excludes entries explicitly
    marked `deleted-calendar` by Nextcloud, even if they still advertise
    `VTODO`. Active read-only shared lists remain visible.
+   For the separate Trash view, discovery retains deleted owned VTODO
+   calendars only when the server advertises `nc-calendar-trashbin` and
+   reports a typed trash collection with positive retention. The client
+   rechecks these conditions before a trash or restore request, then
+   verifies the resulting state with another discovery. Trashing uses plain
+   `DELETE`; restoring uses `MOVE` to `trashbin/restore/file`. Nextcloud
+   controls retention, and its DAV API does not provide an atomic check
+   that retention is still enabled when deletion executes.
 
 Implementation notes:
 
