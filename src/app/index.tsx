@@ -2,6 +2,7 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
 import { AuthenticatedScreen } from '@/features/auth/authenticated-screen';
 import { LoginScreen } from '@/features/auth/login-screen';
+import { useAuthColors } from '@/features/auth/use-auth-colors';
 import { useAuth } from '@/features/auth/use-auth';
 
 /**
@@ -14,12 +15,16 @@ import { useAuth } from '@/features/auth/use-auth';
  */
 export default function RootScreen() {
   const auth = useAuth();
+  const colors = useAuthColors();
 
   if (auth.status === 'restoring') {
     return (
-      <View style={styles.loading} accessibilityLiveRegion="polite">
-        <ActivityIndicator size="large" />
-        <Text style={styles.loadingText}>Loading…</Text>
+      <View
+        style={[styles.loading, { backgroundColor: colors.background }]}
+        accessibilityLiveRegion="polite"
+      >
+        <ActivityIndicator size="large" color={colors.action} />
+        <Text style={[styles.loadingText, { color: colors.muted }]}>Loading…</Text>
       </View>
     );
   }
@@ -47,6 +52,5 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 16,
-    color: '#555',
   },
 });

@@ -106,10 +106,19 @@ one button with a press counter. On a physical iPhone, verify that:
 > **Gate note (Phase 0.5):** this human verification on a physical iPhone is
 > mandatory. An automated test is not a substitute.
 
+### Connection screen appearance (issue #28)
+
+On a physical iPhone in Expo Go, set **Settings → Display & Brightness**
+to Dark. Open the app signed out and check that the heading, server label,
+placeholder, typed URL, validation error, and Continue button are readable.
+Start sign-in and check the waiting text and Cancel button. Once signed in,
+check the server and user details, Task lists, and Log out. Switch back to
+Light and confirm the connection screen updates without restarting the app.
+
 ### Phase 1.3: verifying task-list navigation
 
 In Expo Go, sign in on the dedicated test account. The **Connected**
-screen should show **Task lists** in white text on a blue button and
+screen should show **Task lists** on a blue button and
 offer **Log out**, with no Hello World shortcut. Tap **Task lists**.
 The app should open the task-list screen even if discovery is still
 loading, finds no lists, or reports an error.
