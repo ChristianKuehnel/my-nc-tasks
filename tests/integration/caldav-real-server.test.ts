@@ -2,11 +2,20 @@ import { randomUUID } from 'node:crypto';
 
 import { createCalendar } from '@/services/caldav/collections';
 import { discoverCalendars } from '@/services/caldav/discovery';
+import { webdavRequest } from '@/services/caldav/http';
 import { renameCalendar, deleteCalendar } from '@/services/caldav/mutations';
+import { parseMultistatus } from '@/services/caldav/xml';
 import { normalizeServerUrl } from '@/services/nextcloud/server-url';
 import { nodeFetch } from './node-fetch';
 
-const { NC_TEST_URL, NC_TEST_USER, NC_TEST_PASSWORD, NC_TEST_CREATE } = process.env;
+const {
+  NC_TEST_URL,
+  NC_TEST_USER,
+  NC_TEST_PASSWORD,
+  NC_TEST_CREATE,
+  NC_TEST_READ_ONLY_SHARE_SLUG,
+  NC_TEST_TRASHED_LIST_SLUG,
+} = process.env;
 const credentials =
   NC_TEST_URL && NC_TEST_USER && NC_TEST_PASSWORD
     ? {
@@ -35,6 +44,48 @@ const deps = { fetchImpl: nodeFetch };
     expect(result.homeSetUrl).toMatch(/\/$/);
     expect(result.calendars.some((calendar) => calendar.isOwned && calendar.canRead)).toBe(true);
   });
+
+  function checkDiscoveryFixtures(shareSlug: string, trashSlug: string) {
+    it('discovers an active read-only share without including a trashed task list', async () => {
+      if (!credentials) return;
+      const { homeSetUrl, calendars } = await discoverCalendars(credentials, deps);
+      const fixtureUrl = (slug: string) => new URL(`${encodeURIComponent(slug)}/`, homeSetUrl).href;
+      const trashUrl = fixtureUrl(trashSlug);
+      const { body } = await webdavRequest({
+        credentials,
+        ...deps,
+        method: 'PROPFIND',
+        url: homeSetUrl,
+        depth: '1',
+        body: `<D:propfind xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+          <D:prop><D:resourcetype/><C:supported-calendar-component-set/></D:prop>
+        </D:propfind>`,
+      });
+      // Confirm the fixture still exists in the trash, rather than passing
+      // because the server already purged it.
+      const trash = parseMultistatus(body).find(
+        ({ href }) =>
+          new URL(href, homeSetUrl).pathname.replace(/\/?$/, '/') === new URL(trashUrl).pathname,
+      );
+      expect(trash?.properties.resourcetype).toHaveProperty('deleted-calendar');
+      const components = trash?.properties['supported-calendar-component-set'] as
+        { comp?: { '@_name': string } | { '@_name': string }[] } | undefined;
+      expect([components?.comp].flat()).toContainEqual({ '@_name': 'VTODO' });
+      const share = calendars.find(({ url }) => url === fixtureUrl(shareSlug));
+      expect(share).toMatchObject({
+        isTaskList: true,
+        isOwned: false,
+        isSharedWithMe: true,
+        canRead: true,
+        canWrite: false,
+      });
+      expect(calendars.some(({ url }) => url === trashUrl)).toBe(false);
+    });
+  }
+
+  if (NC_TEST_READ_ONLY_SHARE_SLUG && NC_TEST_TRASHED_LIST_SLUG) {
+    checkDiscoveryFixtures(NC_TEST_READ_ONLY_SHARE_SLUG, NC_TEST_TRASHED_LIST_SLUG);
+  }
 
   // Explicit opt-in: this creates, renames, and deletes a list on the
   // dedicated test account. The delete uses the no-trashbin header, so the

@@ -249,6 +249,23 @@ to `1` to also run a full mutation round-trip: create a list named
 trashbin move). On success the list is gone; verify on the test account
 that no leftover list remains.
 
+To also check the trash discovery regression without writing any data, set
+`NC_TEST_READ_ONLY_SHARE_SLUG` and `NC_TEST_TRASHED_LIST_SLUG` in
+`.env.nc-test`. Use the last path segment (decoded, no surrounding slashes)
+of each collection in the test account's calendar home. The first must be an
+active VTODO collection shared to that account with read-only access; the
+second must be a disposable owned task list already moved to the server's
+trash, not permanently deleted. The test checks the deletion marker directly
+before verifying that discovery excludes the trashed list and keeps the share.
+
+### Phase 1 compatibility and verification
+
+| Server / client               | Verified                                                                                                                                     | Not confirmed by this check                                                   |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Nextcloud 35.0.3 / CalDAV     | Principal and home discovery; active read-only share; trashed list exclusion                                                                 | Other server versions, group sharing, and the full share permission lifecycle |
+| Physical iPhone / my-nc-tasks | Recipient saw the test share before the fix; trashed list disappeared with [PR #30](https://github.com/ChristianKuehnel/my-nc-tasks/pull/30) | Full Phase 1 walkthrough, including MFA and permission changes                |
+| Nextcloud web / iOS Reminders | The trashed test collection was not visible as an active list                                                                                | Visibility of an active share in these clients                                |
+
 ## Continuous integration
 
 GitHub Actions (`.github/workflows/ci.yml`) runs on every push to `main`
