@@ -324,8 +324,21 @@ ETag and send `If-Match`. A `412` is a conflict and is never retried
 unconditionally. Read the task again before another mutation. Summary and
 completion changes replace only the relevant top-level properties,
 preserving other lines, alarms, and extensions. Basic edits and deletes
-refuse recurring resources. Task UI, metadata editing, recurrence editing,
+refuse recurring resources. Task UI, recurrence editing,
 and bulk synchronization are separate work.
+
+## Task metadata (Phase 2.3)
+
+The task model exposes `DESCRIPTION` as notes, RFC 5545 priority
+(`0` means undefined priority; `1` is highest and `9` lowest), and the UTC
+`COMPLETED` timestamp when present. The same conditional update supports
+notes, priority, start and due changes. Omitted fields stay unchanged;
+`null` clears optional fields. Schedule edits validate wall-clock fields,
+require due to follow start when both exist, and refuse mixed time kinds or
+different zones rather than guessing an ordering. The codec reuses zones
+already used by the task or defined in its `VTIMEZONE`; it does not generate
+time zone definitions. `DURATION`, alarms, and unrelated metadata are kept
+intact. Task editor controls and recurrence editing are out of scope.
 
 ## Data safety principles
 
