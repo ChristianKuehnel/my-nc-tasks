@@ -86,6 +86,7 @@ const HOME_SET_PROPFIND = `<?xml version="1.0" encoding="UTF-8"?>
 <D:propfind xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
   <D:prop>
     <D:displayname />
+    <D:resourcetype />
     <D:owner />
     <D:current-user-privilege-set />
     <C:supported-calendar-component-set />
@@ -414,6 +415,10 @@ async function listCalendars(
   const normalizedHome = canonicalUrl(homeSetUrl, credentials.serverUrl);
   const calendars = parseMultistatus(body)
     .filter((response) => canonicalUrl(response.href, credentials.serverUrl) !== normalizedHome)
+    // Nextcloud can still advertise VTODO for calendars in the trash.
+    .filter(
+      (response) => childList(response.properties.resourcetype, 'deleted-calendar').length === 0,
+    )
     .map((response) => {
       const url = canonicalUrl(response.href, credentials.serverUrl);
       const properties = response.properties;
