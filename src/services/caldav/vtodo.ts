@@ -7,10 +7,14 @@ export type TaskTime =
 export interface TaskOccurrence {
   readonly uid: string;
   readonly summary: string | null;
+  readonly notes: string | null;
+  readonly priority: number | null;
   readonly start: TaskTime | null;
   readonly due: TaskTime | null;
   readonly recurrenceId: TaskTime | null;
   readonly completed: boolean;
+  /** UTC timestamp, if supplied by the server. */
+  readonly completedAt: string | null;
 }
 
 /** Represents one CalDAV resource, which may contain several instances of a series. */
@@ -68,14 +72,23 @@ export function parseVTodoResource(source: string): VTodoResource {
       throw new Error('VTODO must have one non-empty UID');
     }
     const summary: unknown = todo.getFirstPropertyValue('summary');
+    const notes: unknown = todo.getFirstPropertyValue('description');
+    const priority: unknown = todo.getFirstPropertyValue('priority');
+    const completedAt = todo.hasProperty('completed') ? taskTime(todo, 'completed') : null;
     return {
       uid,
       summary: typeof summary === 'string' ? summary : null,
+      notes: typeof notes === 'string' ? notes : null,
+      priority:
+        typeof priority === 'number' && Number.isInteger(priority) && priority >= 0 && priority <= 9
+          ? priority
+          : null,
       start: taskTime(todo, 'dtstart'),
       due: taskTime(todo, 'due'),
       recurrenceId: taskTime(todo, 'recurrence-id'),
       completed:
         todo.getFirstPropertyValue('status') === 'COMPLETED' || todo.hasProperty('completed'),
+      completedAt: completedAt?.kind === 'utc' ? completedAt.value : null,
     };
   });
   if (occurrences.some(({ uid }) => uid !== occurrences[0].uid)) {
@@ -107,7 +120,85 @@ function utcStamp(stamp: Date): string {
   return stamp.toISOString().replace(/\.\d{3}Z$/, 'Z');
 }
 
-export type BasicTaskChange = { summary: string } | { completed: boolean; at: Date };
+export interface TaskMetadataChange {
+  summary?: string;
+  notes?: string | null;
+  priority?: number | null;
+  start?: TaskTime | null;
+  due?: TaskTime | null;
+}
+
+export type BasicTaskChange = TaskMetadataChange &
+  ({ completed?: never } | { completed: boolean; at: Date });
+
+function validateTime(time: TaskTime): void {
+  const pattern =
+    time.kind === 'date'
+      ? /^\d{4}-\d{2}-\d{2}$/
+      : time.kind === 'utc'
+        ? /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/
+        : /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/;
+  // Validate the wall-clock fields in UTC, without resolving a zone or changing
+  // the value. The ISO round-trip catches dates Date would silently normalize.
+  const wall =
+    time.kind === 'date'
+      ? `${time.value}T00:00:00Z`
+      : time.kind === 'utc'
+        ? time.value
+        : `${time.value}Z`;
+  const date = new Date(wall);
+  if (
+    !pattern.test(time.value) ||
+    !Number.isFinite(date.getTime()) ||
+    date.getUTCFullYear() < 1 ||
+    date.toISOString().replace('.000Z', 'Z') !== wall
+  ) {
+    throw new Error('Invalid VTODO date or time');
+  }
+}
+
+function validateSchedule(
+  calendar: ICAL.Component,
+  todo: ICAL.Component,
+  change: TaskMetadataChange,
+): void {
+  if (change.start === undefined && change.due === undefined) return;
+  const oldStart = taskTime(todo, 'dtstart');
+  const oldDue = taskTime(todo, 'due');
+  const start = change.start === undefined ? oldStart : change.start;
+  const due = change.due === undefined ? oldDue : change.due;
+  if (todo.hasProperty('duration') && (!start || due)) {
+    throw new Error('VTODO with a duration requires a start and cannot have an explicit due date');
+  }
+  for (const time of [change.start, change.due]) {
+    if (!time) continue;
+    validateTime(time);
+    if (time.kind === 'zoned' && (!time.tzid.trim() || hasControlCharacters(time.tzid, false))) {
+      throw new Error('Invalid VTODO time zone');
+    }
+    if (
+      time.kind === 'zoned' &&
+      ![oldStart, oldDue].some(
+        (previous) => previous?.kind === 'zoned' && previous.tzid === time.tzid,
+      ) &&
+      !calendar
+        .getAllSubcomponents('vtimezone')
+        .some((zone) => zone.getFirstPropertyValue('tzid') === time.tzid)
+    ) {
+      throw new Error('Cannot introduce a time zone without a VTIMEZONE definition');
+    }
+  }
+  if (!start || !due) return;
+  validateTime(start);
+  validateTime(due);
+  if (
+    start.kind !== due.kind ||
+    (start.kind === 'zoned' && due.kind === 'zoned' && start.tzid !== due.tzid)
+  ) {
+    throw new Error('Start and due must use the same date or time kind and zone');
+  }
+  if (due.value <= start.value) throw new Error('Due must be after start');
+}
 
 /** Refuse to update or delete a recurrence with an operation for one task. */
 export function assertSingleTask(source: string): void {
@@ -124,18 +215,43 @@ export function assertSingleTask(source: string): void {
 /** Replace only the selected top-level VTODO properties; keep other lines intact. */
 export function editBasicTask(source: string, change: BasicTaskChange): string {
   assertSingleTask(source);
-  const properties = new Map<string, string | null>();
-  if ('summary' in change) {
-    if (hasControlCharacters(change.summary, true)) throw new Error('Invalid VTODO summary');
-    properties.set('summary', change.summary.replace(/\r\n?/g, '\n'));
-  } else {
+  const properties = new Map<string, string | TaskTime | null>();
+  for (const [name, value] of [
+    ['summary', change.summary],
+    ['description', change.notes],
+  ] as const) {
+    if (value === undefined) continue;
+    if (value !== null && hasControlCharacters(value, true))
+      throw new Error(`Invalid VTODO ${name}`);
+    properties.set(name, value?.replace(/\r\n?/g, '\n') ?? null);
+  }
+  if (change.priority !== undefined) {
+    if (
+      change.priority !== null &&
+      (!Number.isInteger(change.priority) || change.priority < 0 || change.priority > 9)
+    ) {
+      throw new Error('Priority must be an integer from 0 to 9');
+    }
+    properties.set('priority', change.priority === null ? null : String(change.priority));
+  }
+  if (change.start !== undefined) properties.set('dtstart', change.start);
+  if (change.due !== undefined) properties.set('due', change.due);
+  if (change.completed !== undefined) {
     properties.set('status', change.completed ? 'COMPLETED' : 'NEEDS-ACTION');
     properties.set('percent-complete', change.completed ? '100' : '0');
     properties.set('completed', change.completed ? utcStamp(change.at) : null);
   }
-  const todo = new ICAL.Component(ICAL.parse(source)).getFirstSubcomponent('vtodo');
+  const calendar = new ICAL.Component(ICAL.parse(source));
+  const todo = calendar.getFirstSubcomponent('vtodo');
+  if (!todo) throw new Error('VCALENDAR does not contain a VTODO');
+  if (change.start !== undefined || change.due !== undefined) {
+    if (['dtstart', 'due', 'duration'].some((name) => todo.getAllProperties(name).length > 1)) {
+      throw new Error('Ambiguous VTODO schedule');
+    }
+    validateSchedule(calendar, todo, change);
+  }
   for (const name of properties.keys()) {
-    if ((todo?.getAllProperties(name).length ?? 0) > 1) throw new Error(`Ambiguous VTODO ${name}`);
+    if (todo.getAllProperties(name).length > 1) throw new Error(`Ambiguous VTODO ${name}`);
   }
   const eol = source.includes('\r\n') ? '\r\n' : '\n';
   const lines = source.match(/[^\n]*(?:\n|$)/g)?.filter(Boolean) ?? [];
@@ -146,19 +262,26 @@ export function editBasicTask(source: string, change: BasicTaskChange): string {
   }
   const stack: string[] = [];
   const output: string[] = [];
-  function serialize(name: string, value: string, original?: string): string {
+  function serialize(name: string, value: string | TaskTime, original?: string): string {
     const property = original ? ICAL.Property.fromString(original) : new ICAL.Property(name);
-    const expectedType =
-      name === 'completed' ? 'date-time' : name === 'percent-complete' ? 'integer' : 'text';
+    if (typeof value !== 'string') {
+      property.removeParameter('tzid');
+      property.resetType(value.kind === 'date' ? 'date' : 'date-time');
+      property.setValue(
+        value.kind === 'date'
+          ? ICAL.Time.fromDateString(value.value)
+          : ICAL.Time.fromDateTimeString(value.value),
+      );
+      if (value.kind === 'zoned') property.setParameter('tzid', value.tzid);
+      return `${ICAL.helpers.foldline(property.toICALString()).replace(/\r?\n/g, eol)}${eol}`;
+    }
+    const integer = name === 'percent-complete' || name === 'priority';
+    const expectedType = name === 'completed' ? 'date-time' : integer ? 'integer' : 'text';
     if (property.type !== expectedType || (name === 'completed' && property.getParameter('tzid'))) {
       throw new Error(`Unsupported VTODO ${name} format`);
     }
     const typed =
-      name === 'completed'
-        ? ICAL.Time.fromDateTimeString(value)
-        : name === 'percent-complete'
-          ? Number(value)
-          : value;
+      name === 'completed' ? ICAL.Time.fromDateTimeString(value) : integer ? Number(value) : value;
     property.setValue(typed);
     const folded = ICAL.helpers.foldline(property.toICALString()).replace(/\r?\n/g, eol);
     return `${folded}${eol}`;
