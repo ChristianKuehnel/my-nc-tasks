@@ -17,7 +17,7 @@ Build an open-source, offline-first iOS task app for Nextcloud, with an interact
 ### MVP scope
 
 - Discover and display owned and shared Nextcloud task lists.
-- Create, rename, and delete owned lists; safely remove shared lists without deleting their owner's data.
+- Create and rename owned lists; move them to Nextcloud's calendar trash and restore them on supported servers; safely unsubscribe from shared lists without deleting the owner's data.
 - Share lists with Nextcloud users and manage supported read/write permissions.
 - Create, edit, complete, delete, move, and organize tasks and subtasks.
 - Support titles, descriptions, due/start dates and times, priority, completion, and recurring tasks with safe round-tripping of iCalendar data.
@@ -212,8 +212,15 @@ Automated formatter behavior: developers/agents run `pnpm format` to fix style; 
 - **PR 1.4 — Rename/delete/unsubscribe:** safe rename and deletion with confirmation, avoid deleting shared owner's data, respect permissions.
 - **PR 1.5 — List sharing:** search/select users, create/read/update/revoke shares as supported by Nextcloud's DAV sharing extensions; capability detection; no invented generic CalDAV API semantics.
 - **PR 1.6 — Phase 1 integration hardening:** end-to-end happy/error paths, documentation and compatibility matrix for a real Nextcloud server; close known regressions as separate fix PRs.
+- **PR 1.7 — Task-list trash and restore:** build on the deleted-calendar discovery fix (#29). Detect support for Nextcloud's calendar trash before offering **Move to Trash** as the default removal action for owned lists. Never silently fall back to permanent deletion when trash support is missing or a move fails. If permanent deletion is offered, keep it a separate action with explicit irreversible confirmation.
 
 **Acceptance:** Authentication and list operations function on a real Nextcloud test account, with read-only permission behavior and sharing verified; unit/integration fixtures cover failure paths. If credentials are unavailable, do not claim real-server validation.
+
+**PR 1.7 acceptance:**
+
+- Trashed owned task lists are absent from active lists after refresh and accessible in a separate Trash view. Restore returns a list and its tasks to the active view. Use the server's trash and retention policy rather than maintaining a separate local trash.
+- Shared lists continue to offer unsubscribe, not trash or restore. Surface permission failures and items that expired or were removed on the server, without reporting a successful move or restore.
+- Add mocked coverage for move, list, and restore; unsupported and forbidden responses; and active-list refresh. On a dedicated Nextcloud test account and an iPhone, verify a disposable list with a task can be trashed and restored without losing the task.
 
 ## 6. Phase 2 — Task operations and iOS Reminders-inspired UI
 
