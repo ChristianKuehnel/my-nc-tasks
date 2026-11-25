@@ -298,6 +298,20 @@ to view/add/toggle-access/remove shares and to search for sharees.
 Non-goals: sharing task items (not lists), circle/room sharee selection
 beyond display, and optimistic share state (the server is always re-read).
 
+## VTODO codec (Phase 2.1)
+
+`src/services/caldav/vtodo.ts` uses `ical.js` to read a single VTODO
+resource, including multiple instances of the same UID. Dates, floating
+times, UTC times, and times with a `TZID` stay distinct; parsing does not
+resolve time zones or expand recurring series.
+
+Serializing an existing resource returns its original text, preserving
+recurrence rules and exceptions, alarms, time-zone definitions, subtask
+relationships, and extension properties. Creating a new task generates
+a minimal `VCALENDAR` from a caller-supplied UID, UTC timestamp, and
+escaped summary. Editing existing resources, CalDAV task writes, and the
+task UI are not part of this codec.
+
 ## Data safety principles
 
 - iCalendar `VTODO` data round-trips must preserve UIDs, unknown properties,
