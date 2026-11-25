@@ -66,6 +66,10 @@ function listsResult(overrides: Partial<UseListsResult>): UseListsResult {
     createList: jest.fn(async () => true),
     renameList: jest.fn(async () => true),
     deleteList: jest.fn(async () => true),
+    trashSupported: false,
+    trashed: [],
+    trashList: jest.fn(async () => true),
+    restoreList: jest.fn(async () => true),
     unsubscribeList: jest.fn(async () => true),
     ...overrides,
   };
@@ -205,7 +209,7 @@ describe('ListsScreen', () => {
 
     // Pressing Delete opens the confirmation; no delete happens yet.
     await fireEvent.press(screen.getByLabelText('Delete Tasks'));
-    expect(screen.getByText('Delete list?')).toBeDefined();
+    expect(screen.getByText('Permanently delete list?')).toBeDefined();
     expect(deleteList).not.toHaveBeenCalled();
 
     // Cancelling performs no delete.
@@ -216,6 +220,26 @@ describe('ListsScreen', () => {
     await fireEvent.press(screen.getByLabelText('Delete Tasks'));
     await fireEvent.press(screen.getByLabelText('Confirm delete list'));
     expect(deleteList).toHaveBeenCalledWith(TASKS.url);
+  });
+
+  it('offers trash instead of permanent deletion and restores from a separate view', async () => {
+    const trashList = jest.fn(async () => true);
+    const restoreList = jest.fn(async () => true);
+    const trashed = { ...TASKS, url: `${TASKS.url}old/`, displayName: 'Old list' };
+    await renderScreen({ trashSupported: true, trashed: [trashed], trashList, restoreList });
+
+    expect(screen.queryByLabelText('Delete Tasks')).toBeNull();
+    expect(screen.queryByLabelText('Move Shared to Trash')).toBeNull();
+    await fireEvent.press(screen.getByLabelText('Move Tasks to Trash'));
+    expect(trashList).not.toHaveBeenCalled();
+    await fireEvent.press(screen.getByLabelText('Confirm move to Trash'));
+    expect(trashList).toHaveBeenCalledWith(TASKS.url);
+
+    await fireEvent.press(screen.getByLabelText('Open Trash'));
+    expect(screen.queryByText('Tasks')).toBeNull();
+    await fireEvent.press(screen.getByLabelText('Restore Old list'));
+    await fireEvent.press(screen.getByLabelText('Confirm restore list'));
+    expect(restoreList).toHaveBeenCalledWith(trashed.url);
   });
 
   it('refuses to offer delete for a shared list', async () => {

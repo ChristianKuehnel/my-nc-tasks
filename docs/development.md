@@ -235,6 +235,19 @@ pnpm check           # the whole gate in one command
 A noninteractive equivalent of the pre-commit hook (for agents and CI):
 run `pnpm format && pnpm check` before committing/pushing.
 
+### Phase 1.7: verifying list trash and restore
+
+On a dedicated Nextcloud account with calendar trash enabled, create a
+disposable task list and add a task using Nextcloud Tasks. In Expo Go, use
+**Move to Trash** and confirm the list disappears from the active view.
+Open **Trash**, restore the list, and confirm that both the list and its
+task return. Shared lists should still offer only **Unsubscribe**.
+
+On a server without positive calendar trash retention, **Trash** and
+**Move to Trash** are not offered. **Delete** is a separate action with
+an irreversible confirmation. Failed trash and restore requests are not
+retried as permanent deletes.
+
 ## Live CalDAV checks
 
 Use a dedicated HTTPS Nextcloud test account. Keep `NC_TEST_URL`,
@@ -266,6 +279,8 @@ active VTODO collection shared to that account with read-only access; the
 second must be a disposable owned task list already moved to the server's
 trash, not permanently deleted. The test checks the deletion marker directly
 before verifying that discovery excludes the trashed list and keeps the share.
+Set only `NC_TEST_TRASHED_LIST_SLUG` to verify that an owned list is
+discoverable in Trash but not in active lists, without needing a share fixture.
 
 ### Phase 1 compatibility and verification
 

@@ -83,10 +83,11 @@ const PRINCIPAL_PROPFIND = `<?xml version="1.0" encoding="UTF-8"?>
 </D:propfind>`;
 
 const HOME_SET_PROPFIND = `<?xml version="1.0" encoding="UTF-8"?>
-<D:propfind xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+<D:propfind xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav" xmlns:NC="http://nextcloud.com/ns">
   <D:prop>
     <D:displayname />
     <D:resourcetype />
+    <NC:trash-bin-retention-duration />
     <D:owner />
     <D:current-user-privilege-set />
     <C:supported-calendar-component-set />
@@ -401,7 +402,11 @@ async function listCalendars(
   deps: DiscoveryDeps,
   homeSetUrl: string,
   ownPrincipalUrl: string,
-): Promise<{ calendars: CalDAVCalendar[]; davHeader: string | null }> {
+): Promise<{
+  calendars: CalDAVCalendar[];
+  davHeader: string | null;
+  trash?: DiscoveredCalendars['trash'];
+}> {
   const { body, headers } = await webdavRequest({
     credentials,
     method: 'PROPFIND',
@@ -413,12 +418,9 @@ async function listCalendars(
   });
 
   const normalizedHome = canonicalUrl(homeSetUrl, credentials.serverUrl);
-  const calendars = parseMultistatus(body)
+  const davHeader = headers['dav'] ?? null;
+  const entries = parseMultistatus(body)
     .filter((response) => canonicalUrl(response.href, credentials.serverUrl) !== normalizedHome)
-    // Nextcloud can still advertise VTODO for calendars in the trash.
-    .filter(
-      (response) => childList(response.properties.resourcetype, 'deleted-calendar').length === 0,
-    )
     .map((response) => {
       const url = canonicalUrl(response.href, credentials.serverUrl);
       const properties = response.properties;
@@ -432,7 +434,7 @@ async function listCalendars(
       const isOwned = ownerUrl !== null && ownerUrl === ownPrincipalUrl;
       const privileges = parsePrivileges(properties['current-user-privilege-set']);
 
-      return {
+      const calendar: CalDAVCalendar = {
         url,
         displayName: displayNameOf(url, properties.displayname),
         components,
@@ -444,9 +446,39 @@ async function listCalendars(
         canRead: privileges.has('read') || privileges.has('read-free-busy'),
         canWrite: privileges.has('write'),
       };
+      const resourceType = properties.resourcetype;
+      return {
+        calendar,
+        deleted: childList(resourceType, 'deleted-calendar').length > 0,
+        trashBin: childList(resourceType, 'trash-bin').length > 0,
+        retention: Number(firstText(properties['trash-bin-retention-duration'])),
+      };
     });
 
-  return { calendars, davHeader: headers['dav'] ?? null };
+  const trashBin = entries.find(
+    ({ trashBin, retention, calendar }) =>
+      trashBin &&
+      Number.isSafeInteger(retention) &&
+      retention > 0 &&
+      calendar.url === new URL('trashbin/', normalizedHome).href,
+  );
+  const trash =
+    trashBin &&
+    davHeader?.split(',').some((token) => token.trim().toLowerCase() === 'nc-calendar-trashbin')
+      ? {
+          url: trashBin.calendar.url,
+          lists: entries
+            .filter(({ deleted, calendar }) => deleted && calendar.isOwned && calendar.isTaskList)
+            .map(({ calendar }) => calendar),
+        }
+      : undefined;
+  return {
+    calendars: entries
+      .filter(({ deleted, trashBin }) => !deleted && !trashBin)
+      .map(({ calendar }) => calendar),
+    davHeader,
+    trash,
+  };
 }
 
 /**
@@ -461,7 +493,7 @@ export async function discoverCalendars(
   const probe =
     (await probeWellKnown(credentials, deps)) ?? (await probeDavRoot(credentials, deps));
   const homeSetUrl = await ensureHomeSet(credentials, deps, probe.principalUrl, probe.homeSetUrl);
-  const { calendars, davHeader } = await listCalendars(
+  const { calendars, davHeader, trash } = await listCalendars(
     credentials,
     deps,
     homeSetUrl,
@@ -472,6 +504,7 @@ export async function discoverCalendars(
     homeSetUrl,
     davRootUrl: davRootUrl(credentials.serverUrl),
     calendars,
+    trash,
     capabilities: parseDavFeatures(davHeader),
   };
 }

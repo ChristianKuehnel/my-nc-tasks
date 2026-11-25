@@ -33,6 +33,7 @@ import { createCalendar, type CreateCalendarDeps } from '@/services/caldav/colle
 import { CalDAVError } from '@/services/caldav/http';
 import { discoverCalendars } from '@/services/caldav/discovery';
 import { deleteCalendar, renameCalendar, unsubscribeCalendar } from '@/services/caldav/mutations';
+import { changeListTrashState } from '@/services/caldav/trash';
 import {
   listShares,
   searchPrincipals,
@@ -100,6 +101,10 @@ export interface UseListsResult {
   renameList: (url: string, displayName: string) => Promise<boolean>;
   /** Permanently delete an owned list (DAV DELETE, no trashbin). */
   deleteList: (url: string) => Promise<boolean>;
+  trashSupported: boolean;
+  trashed: CalDAVCalendar[];
+  trashList: (url: string) => Promise<boolean>;
+  restoreList: (url: string) => Promise<boolean>;
   /** Unsubscribe from a shared list (removes the share, not the owner's data). */
   unsubscribeList: (url: string) => Promise<boolean>;
 }
@@ -123,6 +128,7 @@ export function useLists(
   const [status, setStatus] = useState<ListsStatus>('loading');
   const [error, setError] = useState<string | null>(null);
   const [calendars, setCalendars] = useState<CalDAVCalendar[]>([]);
+  const [trash, setTrash] = useState<DiscoveredCalendars['trash']>();
   const [isCreating, setIsCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [isMutating, setIsMutating] = useState(false);
@@ -138,6 +144,7 @@ export function useLists(
     homeSetRef.current = discovered.homeSetUrl;
     davRootRef.current = discovered.davRootUrl;
     setSharingSupported(discovered.capabilities.sharing);
+    setTrash(discovered.trash);
     // A fresh discovery invalidates any per-calendar share state (calendars
     // may have been added or removed server-side).
     setShares({});
@@ -148,6 +155,7 @@ export function useLists(
   const applyDiscoveryError = useCallback((err: unknown) => {
     setError(describeError(err));
     setCalendars([]);
+    setTrash(undefined);
     setStatus('error');
   }, []);
 
@@ -176,17 +184,17 @@ export function useLists(
    * blocked (already mutating).
    */
   const runMutation = useCallback(
-    async (mutate: () => Promise<void>): Promise<boolean> => {
+    async (mutate: () => Promise<void | DiscoveredCalendars>): Promise<boolean> => {
       if (isMutating) {
         return false;
       }
       setMutationError(null);
       setIsMutating(true);
       try {
-        await mutate();
+        const result = await mutate();
         // Re-discover so the renamed / removed list reflects the server
         // (new name, ordering, permissions).
-        applyDiscovery(await discover());
+        applyDiscovery(result ?? (await discover()));
         return true;
       } catch (err) {
         setMutationError(describeError(err));
@@ -251,6 +259,17 @@ export function useLists(
     (url: string) =>
       runMutation(() =>
         unsubscribeCalendar({ serverUrl, loginName, appPassword }, url, {
+          fetchImpl,
+          timeoutMs,
+        }),
+      ),
+    [serverUrl, loginName, appPassword, fetchImpl, timeoutMs, runMutation],
+  );
+
+  const changeTrash = useCallback(
+    (url: string, operation: 'trash' | 'restore') =>
+      runMutation(() =>
+        changeListTrashState({ serverUrl, loginName, appPassword }, url, operation, {
           fetchImpl,
           timeoutMs,
         }),
@@ -390,6 +409,10 @@ export function useLists(
     createList,
     renameList,
     deleteList,
+    trashSupported: trash !== undefined,
+    trashed: trash?.lists ?? [],
+    trashList: (url) => changeTrash(url, 'trash'),
+    restoreList: (url) => changeTrash(url, 'restore'),
     unsubscribeList,
   };
 }

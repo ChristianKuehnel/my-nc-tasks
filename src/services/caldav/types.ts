@@ -70,6 +70,8 @@ export interface DiscoveredCalendars {
   davRootUrl: string;
   /** All calendars in the home set (owned and shared), in server order. */
   calendars: CalDAVCalendar[];
+  /** Enabled Nextcloud calendar trash and its owned task lists, if discovered. */
+  trash?: { url: string; lists: CalDAVCalendar[] };
   /** Capabilities detected from the server's DAV feature header. */
   capabilities: CalDAVCapabilities;
 }
