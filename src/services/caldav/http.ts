@@ -16,6 +16,7 @@ export type CalDAVErrorCode =
   | 'unauthorized'
   | 'forbidden'
   | 'not_found'
+  | 'conflict'
   | 'server_error';
 
 export class CalDAVError extends Error {
@@ -44,8 +45,9 @@ interface WebDAVRequestOptions {
   url: string;
   /** DAV:depth for PROPFIND (0 or 1). */
   depth?: string;
-  /** XML request body (propfind documents). */
+  /** Request body (XML by default). */
   body?: string;
+  contentType?: string;
   /** Additional request headers (e.g. `X-NC-CalDAV-No-Trashbin`). */
   headers?: Record<string, string>;
   fetchImpl?: FetchLike;
@@ -73,6 +75,11 @@ function mapHttpError(status: number): CalDAVError {
       return new CalDAVError('forbidden', 'The server refused access (HTTP 403).');
     case 404:
       return new CalDAVError('not_found', 'The requested resource does not exist (HTTP 404).');
+    case 412:
+      return new CalDAVError(
+        'conflict',
+        'The task already exists or has changed. Refresh and try again.',
+      );
     default:
       return new CalDAVError('server_error', `Server responded with HTTP ${status}.`);
   }
@@ -125,7 +132,7 @@ export async function webdavRequest(options: WebDAVRequestOptions): Promise<WebD
       headers.Depth = options.depth;
     }
     if (options.body !== undefined) {
-      headers['Content-Type'] = 'application/xml; charset=utf-8';
+      headers['Content-Type'] = options.contentType ?? 'application/xml; charset=utf-8';
     }
 
     let response: Response;
