@@ -153,6 +153,9 @@ Flow (per authenticated session, RFC 6764 + RFC 4791):
    each calendar yields display name, supported components
    (`VTODO` => task list), owner, `calendar-user-address-set`, and the
    current user's `DAV:current-user-privilege-set` (read / read-write).
+   Discovery checks `DAV:resourcetype` and excludes entries explicitly
+   marked `deleted-calendar` by Nextcloud, even if they still advertise
+   `VTODO`. Active read-only shared lists remain visible.
 
 Implementation notes:
 

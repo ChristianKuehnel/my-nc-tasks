@@ -32,7 +32,7 @@ function res(status: number, body = '', headers: Record<string, string> = {}): R
 
 /** Build a DAV:multistatus document from response entry blocks. */
 function ms(...entries: string[]): string {
-  return `<?xml version="1.0"?><d:multistatus xmlns:d="DAV:" xmlns:c="http://calendarserver.org/ns/">${entries.join(
+  return `<?xml version="1.0"?><d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav" xmlns:nc="http://nextcloud.com/ns">${entries.join(
     '',
   )}</d:multistatus>`;
 }
@@ -152,6 +152,51 @@ describe('discoverCalendars', () => {
 
     expect(result.principalUrl).toBe(PRINCIPAL);
     expect(result.calendars).toHaveLength(3);
+  });
+
+  it('omits trashed owned and shared calendars but keeps an active read-only share', async () => {
+    const trashed =
+      '<d:resourcetype><d:collection/><nc:deleted-calendar/></d:resourcetype>' +
+      COMPS('VEVENT', 'VTODO', 'VJOURNAL');
+    const otherOwner = OWNER('/remote.php/dav/principals/users/bob/');
+    const fetchImpl = router({
+      [WELL_KNOWN]: res(207, PRINCIPAL_PROBE_BODY),
+      [HOME]: res(
+        207,
+        ms(
+          entry('/remote.php/dav/calendars/alice/', OWNERED),
+          entry(`${HOME}trashed/`, OWNERED + READ_WRITE + trashed),
+          entry(`${HOME}trashed_shared_by_bob/`, otherOwner + READ_ONLY + trashed),
+          entry(
+            `${HOME}test-list_shared_by_bob/`,
+            '<d:resourcetype><d:collection/><c:calendar/></d:resourcetype>' +
+              DISPLAY('Test list (Bob)') +
+              otherOwner +
+              '<d:current-user-privilege-set><d:privilege><d:read/></d:privilege>' +
+              '<d:privilege><d:write-properties/></d:privilege></d:current-user-privilege-set>' +
+              COMPS('VTODO'),
+          ),
+        ),
+      ),
+    });
+
+    const { calendars } = await discoverCalendars(CREDENTIALS, { fetchImpl });
+
+    expect(calendars).toMatchObject([
+      {
+        url: `${HOME}test-list_shared_by_bob/`,
+        displayName: 'Test list (Bob)',
+        isTaskList: true,
+        isOwned: false,
+        isSharedWithMe: true,
+        canRead: true,
+        canWrite: false,
+      },
+    ]);
+    expect(fetchImpl).toHaveBeenCalledWith(
+      HOME,
+      expect.objectContaining({ body: expect.stringContaining('<D:resourcetype') }),
+    );
   });
 
   it.each([
