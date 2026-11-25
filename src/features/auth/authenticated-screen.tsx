@@ -4,6 +4,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { AuthSession } from '@/services/nextcloud/types';
 
+import { useAuthColors } from './use-auth-colors';
+
 interface AuthenticatedScreenProps {
   session: AuthSession;
   onLogout: () => void;
@@ -14,30 +16,42 @@ interface AuthenticatedScreenProps {
  * connected to, a link to Task lists, and logout.
  */
 export function AuthenticatedScreen({ session, onLogout }: AuthenticatedScreenProps) {
+  const colors = useAuthColors();
+  const text = { color: colors.text };
+  const muted = { color: colors.muted };
+  const outlined = { borderColor: colors.border, backgroundColor: colors.surface };
+
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={styles.content}>
-        <Text style={styles.title} accessibilityRole="header">
+        <Text style={[styles.title, text]} accessibilityRole="header">
           Connected
         </Text>
-        <View style={styles.card}>
-          <Text style={styles.serverLabel}>Server</Text>
-          <Text style={styles.serverValue}>{session.serverUrl}</Text>
-          <Text style={styles.userLabel}>User</Text>
-          <Text style={styles.userValue}>{session.loginName}</Text>
+        <View style={[styles.card, outlined]}>
+          <Text style={[styles.serverLabel, muted]}>Server</Text>
+          <Text style={[styles.serverValue, text]}>{session.serverUrl}</Text>
+          <Text style={[styles.userLabel, muted]}>User</Text>
+          <Text style={[styles.userValue, text]}>{session.loginName}</Text>
         </View>
         <Link href="/lists" asChild>
-          <Pressable accessibilityLabel="Open task lists" style={styles.listsButton}>
-            <Text style={styles.listsText}>Task lists</Text>
+          <Pressable
+            accessibilityLabel="Open task lists"
+            style={{ ...styles.listsButton, backgroundColor: colors.action }}
+          >
+            <Text style={[styles.listsText, { color: colors.actionText }]}>Task lists</Text>
           </Pressable>
         </Link>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Log out"
-          style={({ pressed }) => [styles.logoutButton, pressed ? styles.buttonPressed : null]}
+          style={({ pressed }) => [
+            styles.logoutButton,
+            outlined,
+            pressed ? styles.buttonPressed : null,
+          ]}
           onPress={onLogout}
         >
-          <Text style={styles.logoutText}>Log out</Text>
+          <Text style={[styles.logoutText, text]}>Log out</Text>
         </Pressable>
       </View>
     </SafeAreaView>
@@ -63,7 +77,6 @@ const styles = StyleSheet.create({
   card: {
     alignSelf: 'stretch',
     borderWidth: 1,
-    borderColor: '#e5e7eb',
     borderRadius: 12,
     padding: 16,
     gap: 4,
@@ -71,7 +84,6 @@ const styles = StyleSheet.create({
   serverLabel: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#6b7280',
   },
   serverValue: {
     fontSize: 16,
@@ -81,7 +93,6 @@ const styles = StyleSheet.create({
     marginTop: 12,
     fontSize: 13,
     fontWeight: '600',
-    color: '#6b7280',
   },
   userValue: {
     fontSize: 16,
@@ -89,20 +100,17 @@ const styles = StyleSheet.create({
   },
   listsButton: {
     borderRadius: 12,
-    backgroundColor: '#2563eb',
     paddingHorizontal: 24,
     paddingVertical: 14,
   },
   listsText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#ffffff',
   },
   logoutButton: {
     marginTop: 8,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#d1d5db',
     paddingHorizontal: 24,
     paddingVertical: 14,
   },

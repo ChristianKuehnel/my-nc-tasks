@@ -1,6 +1,12 @@
 import type { ReactNode } from 'react';
 
 import { fireEvent, render, screen } from '@testing-library/react-native';
+import { useColorScheme } from 'react-native';
+
+jest.mock('react-native', () => {
+  const actual = jest.requireActual('react-native');
+  return Object.defineProperty(Object.create(actual), 'useColorScheme', { value: jest.fn() });
+});
 
 jest.mock('expo-router', () => ({
   Link: ({ children }: { children: ReactNode }) => <>{children}</>,
@@ -35,12 +41,35 @@ const SESSION = {
 describe('RootScreen (auth gate)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.mocked(useColorScheme).mockReturnValue('light');
   });
 
+  it.each([
+    ['light', '#111827', '#475569', '#ffffff', '#2563eb'],
+    ['dark', '#f8fafc', '#cbd5e1', '#0f172a', '#93c5fd'],
+  ] as const)(
+    'styles connected details and actions in %s mode',
+    async (scheme, text, muted, actionText, action) => {
+      jest.mocked(useColorScheme).mockReturnValue(scheme);
+      mockUseAuth.mockReturnValue(authResult({ status: 'authenticated', session: SESSION }));
+      await render(<RootScreen />);
+
+      for (const label of ['Connected', SESSION.serverUrl, SESSION.loginName, 'Log out']) {
+        expect(screen.getByText(label)).toHaveStyle({ color: text });
+      }
+      for (const label of ['Server', 'User']) {
+        expect(screen.getByText(label)).toHaveStyle({ color: muted });
+      }
+      expect(screen.getByText('Task lists')).toHaveStyle({ color: actionText });
+      expect(screen.getByLabelText('Open task lists')).toHaveStyle({ backgroundColor: action });
+    },
+  );
+
   it('shows a loading state while the session is being restored', async () => {
+    jest.mocked(useColorScheme).mockReturnValue('dark');
     mockUseAuth.mockReturnValue(authResult({ status: 'restoring' }));
     await render(<RootScreen />);
-    expect(screen.getByText('Loading…')).toBeDefined();
+    expect(screen.getByText('Loading…')).toHaveStyle({ color: '#cbd5e1' });
   });
 
   it('shows the login screen when unauthenticated, including errors', async () => {
