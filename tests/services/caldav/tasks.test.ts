@@ -1,4 +1,12 @@
-import { createTask, deleteTask, listTasks, readTask, updateTask } from '@/services/caldav/tasks';
+import {
+  createTask,
+  deleteTask,
+  listTasks,
+  moveTask,
+  readTask,
+  setTaskParent,
+  updateTask,
+} from '@/services/caldav/tasks';
 import type { CalDAVCalendar } from '@/services/caldav/types';
 import { parseVTodoResource } from '@/services/caldav/vtodo';
 
@@ -24,6 +32,110 @@ const url = `${calendar.url}task.ics`;
 const alarm = 'BEGIN:VALARM\r\nDESCRIPTION:Alarm\r\nX-EXTENSION:opaque\r\nEND:VALARM\r\n';
 const source = `BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VTODO\r\nUID:task\r\nSUMMARY;LANGUAGE=en:Old\r\nSTATUS:NEEDS-ACTION\r\nX-UNKNOWN:keep  \r\n${alarm}END:VTODO\r\nEND:VCALENDAR\r\n`;
 const task = { url, etag: '"one"', resource: parseVTodoResource(source) };
+
+const destination = { ...calendar, url: `${credentials.serverUrl}/calendars/user/other/` };
+
+function listing(...urls: string[]): Response {
+  return new Response(
+    `<d:multistatus xmlns:d="DAV:">${urls.map((href) => `<d:response><d:href>${href}</d:href></d:response>`).join('')}</d:multistatus>`,
+    { status: 207 },
+  );
+}
+
+function snapshot(child = source, parent?: string) {
+  const parentUrl = `${calendar.url}parent.ics`;
+  const fetchImpl = jest
+    .fn()
+    .mockResolvedValueOnce(listing(...(parent ? [url, parentUrl] : [url])))
+    .mockResolvedValueOnce(new Response(child, { headers: { ETag: '"one"' } }));
+  if (parent) fetchImpl.mockResolvedValueOnce(new Response(parent));
+  return fetchImpl;
+}
+
+describe('task hierarchy and moves', () => {
+  const parent = source.replace('UID:task', 'UID:parent');
+  const linked = source.replace(
+    'STATUS:NEEDS-ACTION',
+    'RELATED-TO:old\r\nRELATED-TO;RELTYPE=SIBLING:sibling',
+  );
+
+  it.each(['parent', null])('updates only the parent link (%s)', async (parentUid) => {
+    const fetchImpl = snapshot(linked, parent).mockResolvedValueOnce(
+      new Response(null, { status: 204 }),
+    );
+    await setTaskParent(credentials, calendar, task, parentUid, { fetchImpl });
+    expect(fetchImpl).toHaveBeenNthCalledWith(
+      4,
+      url,
+      expect.objectContaining({
+        method: 'PUT',
+        headers: expect.objectContaining({ 'If-Match': '"one"' }),
+        body: linked.replace('RELATED-TO:old\r\n', parentUid ? 'RELATED-TO:parent\r\n' : ''),
+      }),
+    );
+  });
+
+  it('rejects a cycle seen in the current list', async () => {
+    const fetchImpl = snapshot(source, parent.replace('STATUS:NEEDS-ACTION', 'RELATED-TO:task'));
+    await expect(
+      setTaskParent(credentials, calendar, task, 'parent', { fetchImpl }),
+    ).rejects.toMatchObject({ code: 'bad_request' });
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+  });
+
+  it('moves with a source revision and without overwriting or resending the task', async () => {
+    const fetchImpl = snapshot()
+      .mockResolvedValueOnce(listing())
+      .mockResolvedValueOnce(new Response(null, { status: 201 }));
+    const newUrl = `${destination.url}task.ics`;
+    await expect(moveTask(credentials, calendar, destination, task, { fetchImpl })).resolves.toBe(
+      newUrl,
+    );
+    expect(fetchImpl).toHaveBeenNthCalledWith(
+      4,
+      url,
+      expect.objectContaining({
+        method: 'MOVE',
+        body: undefined,
+        headers: expect.objectContaining({
+          Destination: newUrl,
+          Overwrite: 'F',
+          'If-Match': '"one"',
+        }),
+      }),
+    );
+  });
+
+  it('does not strand subtasks or overwrite a duplicate UID', async () => {
+    const linkedChild = parent.replace('STATUS:NEEDS-ACTION', 'RELATED-TO:task');
+    const fetchImpl = snapshot(source, linkedChild);
+    await expect(
+      moveTask(credentials, calendar, destination, task, { fetchImpl }),
+    ).rejects.toMatchObject({ code: 'bad_request' });
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+
+    const duplicate = snapshot()
+      .mockResolvedValueOnce(listing(`${destination.url}duplicate.ics`))
+      .mockResolvedValueOnce(new Response(source));
+    await expect(
+      moveTask(credentials, calendar, destination, task, { fetchImpl: duplicate }),
+    ).rejects.toMatchObject({ code: 'conflict' });
+    expect(duplicate).toHaveBeenCalledTimes(4);
+  });
+
+  it('refuses a stale hierarchy edit and a cross-origin move', async () => {
+    const fetchImpl = snapshot();
+    await expect(
+      setTaskParent(credentials, calendar, { ...task, etag: '"old"' }, null, { fetchImpl }),
+    ).rejects.toMatchObject({ code: 'conflict' });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    const other = { ...destination, url: 'https://elsewhere.example.test/tasks/' };
+    await expect(moveTask(credentials, calendar, other, task, { fetchImpl })).rejects.toMatchObject(
+      { code: 'bad_request' },
+    );
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+});
 
 describe('task CRUD', () => {
   it('queries VTODO and reads the original resource and revision', async () => {
