@@ -139,6 +139,9 @@ In Expo Go on a dedicated test account, open a disposable task list.
    but not editable.
 4. Open a read-only share and check that mutation controls are absent.
    Check that the task screen stays readable in Light and Dark mode.
+5. In a task editor, swipe right from the iPhone's left edge. Confirm the
+   gesture returns to the current list's tasks. Swipe again to return to
+   the list overview, then once more to return to **Connected**.
 
 ### Phase 1.4: verifying rename, delete, and unsubscribe
 

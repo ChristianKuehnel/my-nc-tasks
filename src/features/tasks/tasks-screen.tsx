@@ -1,4 +1,5 @@
 import { randomUUID } from 'expo-crypto';
+import { usePreventRemove } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
@@ -133,6 +134,10 @@ export function TasksScreen({
     if (selected) setSelected(null);
     else onBack();
   };
+  // Both task views live inside /lists. Handle a native edge swipe as one
+  // step in that local flow, rather than letting it dismiss the whole route.
+  usePreventRemove(true, back);
+
   useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
       back();

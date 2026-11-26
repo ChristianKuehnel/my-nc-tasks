@@ -4,6 +4,7 @@ import * as service from '@/services/caldav';
 import { parseVTodoResource } from '@/services/caldav/vtodo';
 
 jest.mock('expo-crypto', () => ({ randomUUID: () => 'mock-uid' }));
+jest.mock('expo-router', () => ({ usePreventRemove: jest.fn() }));
 jest.mock('@/services/caldav', () => ({
   ...jest.requireActual('@/services/caldav'),
   listTasks: jest.fn(),
