@@ -15,6 +15,17 @@ export interface TaskOccurrence {
   readonly completed: boolean;
   /** UTC timestamp, if supplied by the server. */
   readonly completedAt: string | null;
+  readonly relationships: readonly TaskRelationship[];
+}
+
+export interface TaskRelationship {
+  readonly type: string;
+  readonly uid: string;
+}
+
+function relationshipType(property: ICAL.Property): string {
+  const type = property.getParameter('reltype');
+  return type == null ? 'PARENT' : typeof type === 'string' ? type.toUpperCase() : '';
 }
 
 /** Represents one CalDAV resource, which may contain several instances of a series. */
@@ -89,6 +100,10 @@ export function parseVTodoResource(source: string): VTodoResource {
       completed:
         todo.getFirstPropertyValue('status') === 'COMPLETED' || todo.hasProperty('completed'),
       completedAt: completedAt?.kind === 'utc' ? completedAt.value : null,
+      relationships: todo.getAllProperties('related-to').map((property) => {
+        const value: unknown = property.getFirstValue();
+        return { type: relationshipType(property), uid: typeof value === 'string' ? value : '' };
+      }),
     };
   });
   if (occurrences.some(({ uid }) => uid !== occurrences[0].uid)) {
@@ -214,6 +229,21 @@ export function assertSingleTask(source: string): void {
 
 /** Replace only the selected top-level VTODO properties; keep other lines intact. */
 export function editBasicTask(source: string, change: BasicTaskChange): string {
+  return editTaskProperties(source, change);
+}
+
+export function editTaskParent(source: string, parentUid: string | null): string {
+  if (parentUid !== null && (!parentUid.trim() || hasControlCharacters(parentUid, false))) {
+    throw new Error('Invalid VTODO parent UID');
+  }
+  return editTaskProperties(source, {}, parentUid);
+}
+
+function editTaskProperties(
+  source: string,
+  change: BasicTaskChange,
+  parentUid?: string | null,
+): string {
   assertSingleTask(source);
   const properties = new Map<string, string | TaskTime | null>();
   for (const [name, value] of [
@@ -244,6 +274,13 @@ export function editBasicTask(source: string, change: BasicTaskChange): string {
   const calendar = new ICAL.Component(ICAL.parse(source));
   const todo = calendar.getFirstSubcomponent('vtodo');
   if (!todo) throw new Error('VCALENDAR does not contain a VTODO');
+  if (parentUid !== undefined) {
+    const parents = todo
+      .getAllProperties('related-to')
+      .filter((property) => relationshipType(property) === 'PARENT');
+    if (parents.length > 1) throw new Error('Ambiguous VTODO parent');
+    properties.set('related-to', parentUid);
+  }
   if (change.start !== undefined || change.due !== undefined) {
     if (['dtstart', 'due', 'duration'].some((name) => todo.getAllProperties(name).length > 1)) {
       throw new Error('Ambiguous VTODO schedule');
@@ -251,7 +288,8 @@ export function editBasicTask(source: string, change: BasicTaskChange): string {
     validateSchedule(calendar, todo, change);
   }
   for (const name of properties.keys()) {
-    if (todo.getAllProperties(name).length > 1) throw new Error(`Ambiguous VTODO ${name}`);
+    if (name !== 'related-to' && todo.getAllProperties(name).length > 1)
+      throw new Error(`Ambiguous VTODO ${name}`);
   }
   const eol = source.includes('\r\n') ? '\r\n' : '\n';
   const lines = source.match(/[^\n]*(?:\n|$)/g)?.filter(Boolean) ?? [];
@@ -264,6 +302,7 @@ export function editBasicTask(source: string, change: BasicTaskChange): string {
   const output: string[] = [];
   function serialize(name: string, value: string | TaskTime, original?: string): string {
     const property = original ? ICAL.Property.fromString(original) : new ICAL.Property(name);
+    if (name === 'related-to' && !original) property.setParameter('reltype', 'PARENT');
     if (typeof value !== 'string') {
       property.removeParameter('tzid');
       property.resetType(value.kind === 'date' ? 'date' : 'date-time');
@@ -301,7 +340,10 @@ export function editBasicTask(source: string, change: BasicTaskChange): string {
       }
     } else if (stack.join('/') === 'vcalendar/vtodo') {
       const name = line.split(/[;:]/, 1)[0].toLowerCase();
-      if (properties.has(name)) {
+      if (
+        properties.has(name) &&
+        (name !== 'related-to' || relationshipType(ICAL.Property.fromString(line)) === 'PARENT')
+      ) {
         const value = properties.get(name);
         properties.delete(name);
         if (value !== null && value !== undefined) output.push(serialize(name, value, line));
