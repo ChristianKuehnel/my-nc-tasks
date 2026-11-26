@@ -39,13 +39,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install Corepack >= 0.36 (runner image Node, for cache key)
         run: npm install -g corepack@0.36.0 && corepack enable
 
       - name: Set up Node.js (pinned in .node-version)
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version-file: .node-version
           cache: pnpm
@@ -76,13 +76,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install Corepack >= 0.36 (runner image Node, for cache key)
         run: npm install -g corepack@0.36.0 && corepack enable
 
       - name: Set up Node.js (pinned in .node-version)
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version-file: .node-version
           cache: pnpm
@@ -114,13 +114,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install Corepack >= 0.36 (runner image Node, for cache key)
         run: npm install -g corepack@0.36.0 && corepack enable
 
       - name: Set up Node.js (pinned in .node-version)
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version-file: .node-version
           cache: pnpm
