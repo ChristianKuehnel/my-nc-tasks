@@ -356,6 +356,16 @@ entire subtrees, cross-list link discovery, and the task UI are out of
 scope. Destination UID collisions are checked before the move; the
 server is authoritative for concurrent writes and permissions.
 
+## Task recurrence (Phase 2.5)
+
+With a valid `DTSTART`, one VTODO can add, replace, or remove a simple
+daily, weekly, monthly, or yearly `RRULE` with interval 1–999. Recurrence
+changes use the task's captured strong ETag and replace only the rule.
+Rules with extra fields (including `COUNT`, `UNTIL`, and `BYDAY`),
+parameterized or duplicate rules, recurrence dates, and exception
+instances stay read-only and are preserved verbatim. The service does not
+expand occurrences or complete recurring tasks.
+
 ## Data safety principles
 
 - iCalendar `VTODO` data round-trips must preserve UIDs, unknown properties,
