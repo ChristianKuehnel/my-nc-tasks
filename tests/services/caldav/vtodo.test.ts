@@ -170,6 +170,7 @@ describe('VTODO resources', () => {
         recurrenceId: null,
         completed: false,
         completedAt: null,
+        relationships: [{ type: 'PARENT', uid: 'parent@example.test' }],
       },
       {
         uid: 'reading@example.test',
@@ -181,6 +182,7 @@ describe('VTODO resources', () => {
         recurrenceId: { kind: 'zoned', value: '2026-10-25T09:00:00', tzid: 'Europe/Berlin' },
         completed: false,
         completedAt: null,
+        relationships: [],
       },
     ]);
     expect(parsed.serialize()).toBe(recurringTask);
