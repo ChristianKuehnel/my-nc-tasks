@@ -9,13 +9,17 @@ export {
   readTask,
   createTask,
   updateTask,
+  updateTaskRecurrence,
   deleteTask,
   setTaskParent,
   moveTask,
 } from './tasks';
+export { readTaskRecurrence } from './vtodo';
 export type { DavTask } from './tasks';
 export type {
   BasicTaskChange,
+  SimpleTaskRecurrence,
+  TaskRecurrence,
   TaskMetadataChange,
   TaskOccurrence,
   TaskRelationship,
