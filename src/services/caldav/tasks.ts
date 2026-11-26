@@ -5,9 +5,11 @@ import {
   assertSingleTask,
   createVTodoResource,
   editBasicTask,
+  editTaskRecurrence,
   editTaskParent,
   parseVTodoResource,
   type BasicTaskChange,
+  type SimpleTaskRecurrence,
   type VTodoResource,
 } from './vtodo';
 import { parseMultistatus } from './xml';
@@ -164,6 +166,27 @@ export async function deleteTask(
     method: 'DELETE',
     url: taskUrl(calendar, task.url),
     headers: { 'If-Match': strongEtag(task.etag) },
+  });
+  requireMutationStatus(status);
+}
+
+/** Edit a supported series using the revision captured with its original body. */
+export async function updateTaskRecurrence(
+  credentials: CalDAVCredentials,
+  calendar: CalDAVCalendar,
+  task: DavTask,
+  rule: SimpleTaskRecurrence | null,
+  deps: MutationDeps = {},
+): Promise<void> {
+  requireAccess(calendar, true);
+  const { status } = await webdavRequest({
+    ...deps,
+    credentials,
+    method: 'PUT',
+    url: taskUrl(calendar, task.url),
+    headers: { 'If-Match': strongEtag(task.etag) },
+    contentType: 'text/calendar; charset=utf-8',
+    body: editTaskRecurrence(task.resource.serialize(), rule),
   });
   requireMutationStatus(status);
 }
