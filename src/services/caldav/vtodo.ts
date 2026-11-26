@@ -291,6 +291,13 @@ function editTaskProperties(
     if (name !== 'related-to' && todo.getAllProperties(name).length > 1)
       throw new Error(`Ambiguous VTODO ${name}`);
   }
+  return replaceTaskProperties(source, properties);
+}
+
+function replaceTaskProperties(
+  source: string,
+  properties: Map<string, string | TaskTime | null>,
+): string {
   const eol = source.includes('\r\n') ? '\r\n' : '\n';
   const lines = source.match(/[^\n]*(?:\n|$)/g)?.filter(Boolean) ?? [];
   const groups: string[] = [];
@@ -301,6 +308,7 @@ function editTaskProperties(
   const stack: string[] = [];
   const output: string[] = [];
   function serialize(name: string, value: string | TaskTime, original?: string): string {
+    if (name === 'rrule') return `RRULE:${value}${eol}`;
     const property = original ? ICAL.Property.fromString(original) : new ICAL.Property(name);
     if (name === 'related-to' && !original) property.setParameter('reltype', 'PARENT');
     if (typeof value !== 'string') {
@@ -353,6 +361,79 @@ function editTaskProperties(
     output.push(group);
   }
   return output.join('');
+}
+
+const frequencies = ['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'] as const;
+export interface SimpleTaskRecurrence {
+  frequency: (typeof frequencies)[number];
+  interval: number;
+}
+
+export type TaskRecurrence =
+  { kind: 'unavailable' | 'unsupported' | 'none' } | { kind: 'simple'; rule: SimpleTaskRecurrence };
+
+function validRule(rule: SimpleTaskRecurrence): boolean {
+  return (
+    frequencies.includes(rule.frequency) &&
+    Number.isInteger(rule.interval) &&
+    rule.interval >= 1 &&
+    rule.interval <= 999
+  );
+}
+
+/** Read capability without expanding the series or rewriting its source. */
+export function readTaskRecurrence(source: string): TaskRecurrence {
+  const resource = parseVTodoResource(source);
+  const calendar = new ICAL.Component(ICAL.parse(source));
+  const todo = calendar.getFirstSubcomponent('vtodo');
+  if (
+    !todo ||
+    resource.occurrences.length !== 1 ||
+    ['recurrence-id', 'rdate', 'exdate', 'exrule'].some((name) => todo.hasProperty(name))
+  ) {
+    return { kind: 'unsupported' };
+  }
+  const rules = todo.getAllProperties('rrule');
+  const start = resource.occurrences[0].start;
+  if (!start || todo.getAllProperties('dtstart').length !== 1) {
+    return { kind: rules.length ? 'unsupported' : 'unavailable' };
+  }
+  try {
+    validateTime(start);
+  } catch {
+    return { kind: rules.length ? 'unsupported' : 'unavailable' };
+  }
+  if (!rules.length) return { kind: 'none' };
+  // Inspect the source, not a normalized RRULE: a parser could discard fields
+  // it does not understand. Only an unparameterized FREQ/INTERVAL is editable.
+  const raw = source
+    .replace(/\r?\n[ \t]/g, '')
+    .split(/\r?\n/)
+    .filter((line) => /^RRULE[:;]/i.test(line));
+  if (rules.length !== 1 || raw.length !== 1) return { kind: 'unsupported' };
+  const match = /^RRULE:FREQ=(DAILY|WEEKLY|MONTHLY|YEARLY)(?:;INTERVAL=([0-9]{1,3}))?$/i.exec(
+    raw[0],
+  );
+  if (!match) return { kind: 'unsupported' };
+  const rule = {
+    frequency: match[1].toUpperCase() as SimpleTaskRecurrence['frequency'],
+    interval: Number(match[2] ?? 1),
+  };
+  return validRule(rule) ? { kind: 'simple', rule } : { kind: 'unsupported' };
+}
+
+export function editTaskRecurrence(source: string, rule: SimpleTaskRecurrence | null): string {
+  const { kind } = readTaskRecurrence(source);
+  if (kind === 'unavailable' || kind === 'unsupported') {
+    throw new Error(
+      'Recurrence editing requires a valid start and a task without advanced recurrence or exceptions.',
+    );
+  }
+  if (rule !== null && !validRule(rule)) throw new Error('Invalid task recurrence rule.');
+  return replaceTaskProperties(
+    source,
+    new Map([['rrule', rule === null ? null : `FREQ=${rule.frequency};INTERVAL=${rule.interval}`]]),
+  );
 }
 
 function hasControlCharacters(value: string, allowWhitespace: boolean): boolean {
