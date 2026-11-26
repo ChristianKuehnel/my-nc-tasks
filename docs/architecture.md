@@ -14,16 +14,16 @@ versions or layering decisions change.
 
 ## Technology stack (pinned)
 
-| Component    | Version               | Pin location                                    | Notes                                                                                                                                                                            |
-| ------------ | --------------------- | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Expo SDK     | ~58.0.26              | `package.json`                                  | RN 0.88, React 19.3                                                                                                                                                              |
-| React Native | 0.88.1                | `package.json`                                  |                                                                                                                                                                                  |
-| React        | 19.3.0                | `package.json`                                  |                                                                                                                                                                                  |
-| Node.js      | 22.23.5               | `.node-version`, `.mise.toml`                   | Latest 22.x (LTS); Expo requires >=22.13 on the 22 line; some tooling (lint-staged 17) requires >=22.22.1                                                                        |
-| pnpm         | 12.21.0               | `package.json` (`packageManager`), `.mise.toml` | via Corepack or mise                                                                                                                                                             |
-| TypeScript   | ~6.0.3                | `package.json`                                  | strict mode                                                                                                                                                                      |
-| Router       | expo-router ~58.0.32  | `package.json`                                  | file-based routing under `src/app`                                                                                                                                               |
-| XML parser   | fast-xml-parser 4.5.7 | `package.json`                                  | v4 pinned on purpose: CJS build with bundled types, single dependency (`strnum`) — compatible with Metro/Hermes; v5 is an ESM Nodable rewrite that is not a safe fit for Expo Go |
+| Component    | Version                | Pin location                                    | Notes                                                                                                                           |
+| ------------ | ---------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Expo SDK     | ~58.0.26               | `package.json`                                  | RN 0.88, React 19.3                                                                                                             |
+| React Native | 0.88.1                 | `package.json`                                  |                                                                                                                                 |
+| React        | 19.3.0                 | `package.json`                                  |                                                                                                                                 |
+| Node.js      | 22.23.5                | `.node-version`, `.mise.toml`                   | Latest 22.x (LTS); Expo requires >=22.13 on the 22 line; some tooling (lint-staged 17) requires >=22.22.1                       |
+| pnpm         | 12.21.0                | `package.json` (`packageManager`), `.mise.toml` | via Corepack or mise                                                                                                            |
+| TypeScript   | ~6.0.3                 | `package.json`                                  | strict mode                                                                                                                     |
+| Router       | expo-router ~58.0.32   | `package.json`                                  | file-based routing under `src/app`                                                                                              |
+| XML parser   | fast-xml-parser 5.12.1 | `package.json`, `pnpm-lock.yaml`                | Parses CalDAV XML. The v5 upgrade passed the iOS bundle check and a physical iPhone user-search smoke test in Expo Go (PR #49). |
 
 ### Why Expo SDK 58
 
