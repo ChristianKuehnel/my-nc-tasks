@@ -41,7 +41,7 @@ jobs:
 
       - name: Checkout
         if: ${{ secrets.EXPO_TOKEN != '' }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Node.js (pinned in .node-version)
         if: ${{ secrets.EXPO_TOKEN != '' }}
