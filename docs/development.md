@@ -297,14 +297,21 @@ GitHub Actions (`.github/workflows/ci.yml`) runs on every push to `main`
 and on every pull request targeting `main`. The three required checks
 (enforced by the `main` branch protection ruleset):
 
-| Check          | What it validates                                                            |
-| -------------- | ---------------------------------------------------------------------------- |
-| `quality-gate` | Prettier check, ESLint, TypeScript strict, Jest + coverage, dependency audit |
-| `expo-doctor`  | Expo project/dependency configuration (20 checks)                            |
-| `ios-bundle`   | `expo export --platform ios` — the Metro/Hermes bundle actually builds       |
+| Check          | What it validates                                                                         |
+| -------------- | ----------------------------------------------------------------------------------------- |
+| `quality-gate` | Prettier check, ESLint, TypeScript strict, Jest + coverage, dependency audit              |
+| `expo-doctor`  | Dependency compatibility with the locked Expo SDK, plus Expo Doctor project/config checks |
+| `ios-bundle`   | `expo export --platform ios` — the Metro/Hermes bundle actually builds                    |
 
 CodeQL runs via GitHub's code scanning default setup (JavaScript/TypeScript,
 default query suite) — no custom scanner workflow, no duplication.
+
+The required Expo job runs `EXPO_OFFLINE=1 pnpm exec expo install --check`
+against the compatibility table shipped with the installed SDK. It then runs
+the other checks in pinned Expo Doctor (`1.21.8`). A separate advisory step
+runs the full online Doctor, so new upstream recommendations are visible
+without breaking an unchanged lockfile. Frozen installation, pnpm's minimum
+release age, and the dependency audit still apply.
 
 > **Scope note:** all CI checks run on Linux. They are **not** an iOS
 > native compile — they validate the JavaScript bundle, the Expo
@@ -344,7 +351,8 @@ bundled with Node 22.x cannot start pnpm 12), pnpm pinned via the
    (`npx expo install expo@<sdk> --fix` aligns all supported packages).
 2. Update the pins in `package.json` (via `expo install`), `.node-version`
    / `.mise.toml` when the Node requirement changes.
-3. Run `npx expo-doctor` to catch misaligned versions.
+3. Run `EXPO_OFFLINE=1 pnpm exec expo install --check` to validate the locked
+   SDK, and `pnpm dlx expo-doctor@1.21.8` to review current recommendations.
 4. Update `docs/architecture.md` with the new versions and reasoning.
 5. Commit `pnpm-lock.yaml`. Keep the change in its own branch/PR.
 
