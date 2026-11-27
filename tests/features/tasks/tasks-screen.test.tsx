@@ -78,6 +78,17 @@ it('edits changed fields only and requires a refresh after a conflict', async ()
   expect(service.updateTask).toHaveBeenCalledTimes(1);
 });
 
+it('refreshes tasks from a compact, labeled icon', async () => {
+  await render(<TasksScreen session={session} calendar={calendar} onBack={jest.fn()} />);
+  await screen.findByRole('button', { name: 'Open Buy milk' });
+  const refresh = screen.getByRole('button', { name: 'Refresh tasks' });
+  expect(refresh).toHaveTextContent('↻');
+  expect(refresh).toHaveStyle({ width: 44, height: 44 });
+  expect(screen.queryByText('Refresh tasks')).toBeNull();
+  await fireEvent.press(refresh);
+  expect(service.listTasks).toHaveBeenCalledTimes(2);
+});
+
 it('opens a read-only list without offering writes', async () => {
   await render(
     <TasksScreen

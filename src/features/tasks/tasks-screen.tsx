@@ -139,6 +139,12 @@ const rowStyles = StyleSheet.create({
   actions: { alignItems: 'flex-end', paddingBottom: 8 },
 });
 
+const headerStyles = StyleSheet.create({
+  row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  title: { flex: 1, fontSize: 28, fontWeight: '700' },
+  refresh: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+});
+
 export function TasksScreen({
   session,
   calendar,
@@ -252,19 +258,27 @@ export function TasksScreen({
             disabled={busy}
             onPress={back}
           />
-          <Text
-            accessibilityRole="header"
-            style={{ color: colors.text, fontSize: 28, fontWeight: '700' }}
-          >
-            {calendar.displayName}
-          </Text>
+          <View style={headerStyles.row}>
+            <Text accessibilityRole="header" style={[headerStyles.title, { color: colors.text }]}>
+              {calendar.displayName}
+            </Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Refresh tasks"
+              accessibilityState={{ disabled: busy }}
+              disabled={busy}
+              onPress={() => void run()}
+              style={headerStyles.refresh}
+            >
+              <Text style={{ color: busy ? colors.muted : colors.action, fontSize: 24 }}>↻</Text>
+            </Pressable>
+          </View>
           {!calendar.canWrite && <Text style={{ color: colors.muted }}>Read-only list</Text>}
           {error && (
             <Text accessibilityRole="alert" style={{ color: colors.error }}>
               {error}
             </Text>
           )}
-          <TaskButton label="Refresh tasks" disabled={busy} onPress={() => void run()} />
           {busy && (
             <Text accessibilityLiveRegion="polite" style={{ color: colors.muted }}>
               Working…

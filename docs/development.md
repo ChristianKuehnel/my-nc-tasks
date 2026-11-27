@@ -129,6 +129,7 @@ Tap an active list name to open its tasks (Phase 2.6).
 ### Phase 2.6: task screen on iPhone
 
 In Expo Go on a dedicated test account, open a disposable task list.
+Use the circular-arrow icon beside the list title to refresh its tasks.
 
 1. Quickly add a task, open it, edit the title, notes, priority, and due
    date, and confirm the values match Nextcloud Tasks after refreshing.
