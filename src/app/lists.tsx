@@ -27,6 +27,7 @@ export default function ListsRoute() {
   return (
     <ListsScreen
       session={session}
+      onOpenSmartView={(view) => router.push({ pathname: '/smart-tasks', params: { view } })}
       onOpenList={
         navigation
           ? (calendar) => {
