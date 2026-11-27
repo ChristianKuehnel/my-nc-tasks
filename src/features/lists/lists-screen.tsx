@@ -16,13 +16,13 @@ import type { CreateCalendarDeps } from '@/services/caldav/collections';
 import type { CalendarShare, SharePrincipal } from '@/services/caldav/sharing';
 import type { CalDAVCalendar } from '@/services/caldav/types';
 import type { AuthSession } from '@/services/nextcloud/types';
-import { TasksScreen } from '@/features/tasks/tasks-screen';
 import { useLists, type UseListsResult } from './use-lists';
 
 interface ListsScreenProps {
   session: AuthSession;
   /** Optional dependency overrides (used by tests). */
   options?: CreateCalendarDeps;
+  onOpenList?: (calendar: CalDAVCalendar) => void;
 }
 
 /** Which dialog is open (at most one at a time), or `null`. */
@@ -63,12 +63,11 @@ function shareSubtitle(shares: CalendarShare[]): string | null {
  * servers, or explicitly deleted where Trash is unavailable. Shared lists
  * can only be unsubscribed, without changing the owner's data.
  */
-export function ListsScreen({ session, options }: ListsScreenProps) {
+export function ListsScreen({ session, options, onOpenList }: ListsScreenProps) {
   const lists = useLists(toCredentials(session), options);
   const [dialog, setDialog] = useState<Dialog>(null);
   const [showTrash, setShowTrash] = useState(false);
   const [draftName, setDraftName] = useState('');
-  const [openList, setOpenList] = useState<CalDAVCalendar | null>(null);
 
   const busy = lists.isCreating || lists.isMutating;
   const closeDialog = () => {
@@ -87,18 +86,6 @@ export function ListsScreen({ session, options }: ListsScreenProps) {
   const openShare = (calendar: CalDAVCalendar) => {
     setDialog({ kind: 'share', calendar });
   };
-
-  if (openList) {
-    return (
-      <TasksScreen
-        key={openList.url}
-        calendar={openList}
-        session={session}
-        options={options}
-        onBack={() => setOpenList(null)}
-      />
-    );
-  }
 
   if (lists.status === 'loading') {
     return (
@@ -195,7 +182,7 @@ export function ListsScreen({ session, options }: ListsScreenProps) {
                     subtitle={shareSubtitle(lists.getShares(calendar.url))}
                     busy={busy}
                     onRename={() => openRename(calendar)}
-                    onOpen={calendar.canRead ? () => setOpenList(calendar) : undefined}
+                    onOpen={calendar.canRead && onOpenList ? () => onOpenList(calendar) : undefined}
                     onShare={lists.sharingSupported ? () => openShare(calendar) : undefined}
                     onTrash={
                       lists.trashSupported && calendar.canWrite
@@ -221,7 +208,7 @@ export function ListsScreen({ session, options }: ListsScreenProps) {
                     subtitle={calendar.canWrite ? 'Shared with you' : 'Shared with you · read-only'}
                     busy={busy}
                     onUnsubscribe={() => setDialog({ kind: 'unsubscribe', calendar })}
-                    onOpen={calendar.canRead ? () => setOpenList(calendar) : undefined}
+                    onOpen={calendar.canRead && onOpenList ? () => onOpenList(calendar) : undefined}
                   />
                 ))}
               </Section>

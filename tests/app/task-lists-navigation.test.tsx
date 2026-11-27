@@ -3,6 +3,9 @@ import { renderRouter, screen, testRouter } from 'expo-router/testing-library';
 
 import RootScreen from '@/app/index';
 import ListsRoute from '@/app/lists';
+import TasksRoute from '@/app/tasks';
+import TaskEditorRoute from '@/app/task-editor';
+import RootLayout from '@/app/_layout';
 import { listTasks } from '@/services/caldav';
 import { parseVTodoResource } from '@/services/caldav/vtodo';
 
@@ -51,7 +54,7 @@ it('opens Task lists from the connected screen', async () => {
   expect(screen.getByRole('header', { name: 'Task lists' })).toBeOnTheScreen();
 });
 
-it('backs out of task details one level at a time without leaving the lists route', async () => {
+it('puts each task view on the stack so Back reveals the correct previous screen', async () => {
   jest.mocked(listTasks).mockResolvedValue([
     {
       url: 'https://cloud.example.com/tasks/milk.ics',
@@ -61,14 +64,22 @@ it('backs out of task details one level at a time without leaving the lists rout
       ),
     },
   ]);
-  await renderRouter({ index: RootScreen, lists: ListsRoute });
+  await renderRouter({
+    _layout: RootLayout,
+    index: RootScreen,
+    lists: ListsRoute,
+    tasks: TasksRoute,
+    'task-editor': TaskEditorRoute,
+  });
   const user = userEvent.setup();
   await user.press(screen.getByRole('link', { name: 'Open task lists' }));
   await user.press(screen.getByRole('button', { name: 'Open list Groceries' }));
+  expect(screen).toHavePathname('/tasks');
   await user.press(await screen.findByRole('button', { name: 'Open Milk' }));
   expect(screen.getByRole('header', { name: 'Edit task' })).toBeOnTheScreen();
+  expect(screen).toHavePathname('/task-editor');
 
-  await testRouter.back('/lists');
+  await testRouter.back('/tasks');
   expect(screen.getByRole('button', { name: 'Open Milk' })).toBeOnTheScreen();
   await testRouter.back('/lists');
   expect(screen.getByRole('header', { name: 'Task lists' })).toBeOnTheScreen();

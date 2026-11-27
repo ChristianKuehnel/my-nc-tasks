@@ -4,7 +4,6 @@ import * as service from '@/services/caldav';
 import { parseVTodoResource } from '@/services/caldav/vtodo';
 
 jest.mock('expo-crypto', () => ({ randomUUID: () => 'mock-uid' }));
-jest.mock('expo-router', () => ({ usePreventRemove: jest.fn() }));
 jest.mock('@/services/caldav', () => ({
   ...jest.requireActual('@/services/caldav'),
   listTasks: jest.fn(),
@@ -60,8 +59,17 @@ it('edits changed fields only and requires a refresh after a conflict', async ()
   jest
     .mocked(service.updateTask)
     .mockRejectedValue(new service.CalDAVError('conflict', 'Refresh and try again.'));
-  await render(<TasksScreen session={session} calendar={calendar} onBack={jest.fn()} />);
-  await fireEvent.press(await screen.findByRole('button', { name: 'Open Buy milk' }));
+  const onBack = jest.fn();
+  const onEditorRefresh = jest.fn();
+  await render(
+    <TasksScreen
+      session={session}
+      calendar={calendar}
+      task={item}
+      onBack={onBack}
+      onEditorRefresh={onEditorRefresh}
+    />,
+  );
   await fireEvent.changeText(screen.getByLabelText('Notes'), 'One carton');
   await fireEvent.press(screen.getByRole('button', { name: 'Save task' }));
   expect(service.updateTask).toHaveBeenCalledWith(
@@ -74,7 +82,8 @@ it('edits changed fields only and requires a refresh after a conflict', async ()
   expect(await screen.findByRole('alert')).toHaveTextContent('Refresh and try again.');
   expect(screen.queryByRole('button', { name: 'Save task' })).toBeNull();
   await fireEvent.press(screen.getByRole('button', { name: 'Refresh tasks' }));
-  expect(await screen.findByRole('button', { name: 'Open Buy milk' })).toBeOnTheScreen();
+  expect(onEditorRefresh).toHaveBeenCalledTimes(1);
+  expect(onBack).toHaveBeenCalledTimes(1);
   expect(service.updateTask).toHaveBeenCalledTimes(1);
 });
 
@@ -90,11 +99,13 @@ it('refreshes tasks from a compact, labeled icon', async () => {
 });
 
 it('opens a read-only list without offering writes', async () => {
+  const onOpenTask = jest.fn();
   await render(
     <TasksScreen
       session={session}
       calendar={{ ...calendar, canWrite: false }}
       onBack={jest.fn()}
+      onOpenTask={onOpenTask}
     />,
   );
   expect(screen.queryByRole('button', { name: 'Add task' })).toBeNull();
@@ -102,6 +113,15 @@ it('opens a read-only list without offering writes', async () => {
   expect(screen.getByRole('checkbox', { name: 'Buy milk', checked: false })).toBeDisabled();
   expect(screen.queryByRole('button', { name: 'Actions for Buy milk' })).toBeNull();
   await fireEvent.press(open);
+  expect(onOpenTask).toHaveBeenCalledWith(item);
+  await render(
+    <TasksScreen
+      session={session}
+      calendar={{ ...calendar, canWrite: false }}
+      task={item}
+      onBack={jest.fn()}
+    />,
+  );
   expect(screen.getByText('Read-only task')).toBeOnTheScreen();
   expect(screen.queryByRole('button', { name: 'Save task' })).toBeNull();
 });

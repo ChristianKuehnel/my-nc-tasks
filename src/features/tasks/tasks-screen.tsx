@@ -1,9 +1,7 @@
 import { randomUUID } from 'expo-crypto';
-import { usePreventRemove } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
-  BackHandler,
   KeyboardAvoidingView,
   PanResponder,
   Platform,
@@ -150,19 +148,24 @@ export function TasksScreen({
   calendar,
   onBack,
   options,
+  task: selected,
+  onOpenTask,
+  onEditorRefresh,
 }: {
   session: AuthSession;
   calendar: CalDAVCalendar;
   onBack: () => void;
   options?: { fetchImpl?: FetchLike; timeoutMs?: number };
+  task?: DavTask;
+  onOpenTask?: (task: DavTask) => void;
+  onEditorRefresh?: () => void;
 }) {
   const colors = useAuthColors();
   const [tasks, setTasks] = useState<DavTask[] | null>(null);
-  const [selected, setSelected] = useState<DavTask | null>(null);
   const [title, setTitle] = useState('');
-  const [busy, setBusy] = useState(true);
+  const [busy, setBusy] = useState(!selected);
   const [error, setError] = useState<string | null>(null);
-  const [stale, setStale] = useState(true);
+  const [stale, setStale] = useState(!selected);
   const pending = useRef(false);
   const load = useCallback(
     () => listTasks(session, calendar, options),
@@ -171,6 +174,7 @@ export function TasksScreen({
   const message = (err: unknown) => (err instanceof Error ? err.message : 'Something went wrong.');
 
   useEffect(() => {
+    if (selected) return;
     let active = true;
     load()
       .then((items) => {
@@ -188,24 +192,12 @@ export function TasksScreen({
     return () => {
       active = false;
     };
-  }, [load]);
+  }, [load, selected]);
 
   const back = () => {
     if (pending.current) return;
-    if (selected) setSelected(null);
-    else onBack();
+    onBack();
   };
-  // Both task views live inside /lists. Handle a native edge swipe as one
-  // step in that local flow, rather than letting it dismiss the whole route.
-  usePreventRemove(true, back);
-
-  useEffect(() => {
-    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
-      back();
-      return true;
-    });
-    return () => subscription.remove();
-  });
 
   async function run(write?: () => Promise<unknown>, afterWrite?: () => void) {
     if (pending.current || busy || (write && (stale || !calendar.canWrite))) return;
@@ -219,10 +211,13 @@ export function TasksScreen({
         saved = true;
         afterWrite?.();
       }
-      const next = await load();
-      setTasks(next);
-      setSelected(null);
-      setStale(false);
+      if (selected) {
+        onEditorRefresh?.();
+        onBack();
+      } else {
+        setTasks(await load());
+        setStale(false);
+      }
     } catch (err) {
       setStale(true);
       setError(saved ? `Change saved, but refresh failed: ${message(err)}` : message(err));
@@ -324,7 +319,7 @@ export function TasksScreen({
                     name={name}
                     busy={busy}
                     completed={entry.completed}
-                    onOpen={() => setSelected(item)}
+                    onOpen={() => onOpenTask?.(item)}
                     due={entry.due?.value}
                     onToggle={
                       basic

@@ -369,7 +369,9 @@ expand occurrences or complete recurring tasks.
 ## Task screen (Phase 2.6)
 
 Opening a readable active list uses the discovered collection and the
-authenticated session in memory. The task screen offers quick add, a
+authenticated session in memory. The list overview, tasks, and task
+editor have separate native stack entries so iOS back gestures reveal
+the correct previous screen. The task screen offers quick add, a
 metadata editor, simple recurrence controls, and completion, reopening,
 and confirmed deletion for non-recurring tasks. Each task has a compact
 row with a completion circle and a tappable title. Completed titles are

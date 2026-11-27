@@ -143,7 +143,8 @@ Use the circular-arrow icon beside the list title to refresh its tasks.
    Check that the task screen stays readable in Light and Dark mode.
 5. In a task editor, swipe right from the iPhone's left edge. Confirm the
    gesture returns to the current list's tasks. Swipe again to return to
-   the list overview, then once more to return to **Connected**.
+   the list overview. Neither swipe should reveal **Connected**, even
+   while the screen is sliding. A third swipe returns to **Connected**.
 
 ### Phase 1.4: verifying rename, delete, and unsubscribe
 
