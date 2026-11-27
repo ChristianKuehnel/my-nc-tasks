@@ -132,8 +132,9 @@ In Expo Go on a dedicated test account, open a disposable task list.
 
 1. Quickly add a task, open it, edit the title, notes, priority, and due
    date, and confirm the values match Nextcloud Tasks after refreshing.
-2. Swipe left on the task or tap **Actions for …**. Complete and reopen
-   it, then confirm deletion of the disposable task.
+2. Tap the circle to complete the task. Verify that the circle is checked
+   and the title is struck through. Tap the circle again to reopen it.
+   Swipe left or tap **⋯** to reveal Delete, then confirm deletion.
 3. Give a different task a start date, reopen it, and add or remove a
    simple repeat rule. Check that a task with an advanced rule is readable
    but not editable.

@@ -7,7 +7,9 @@ import {
   KeyboardAvoidingView,
   PanResponder,
   Platform,
+  Pressable,
   ScrollView,
+  StyleSheet,
   Text,
   View,
 } from 'react-native';
@@ -30,7 +32,7 @@ import { TaskEditor } from './task-editor';
 
 function TaskRow({
   name,
-  status,
+  due,
   busy,
   completed,
   onOpen,
@@ -38,7 +40,7 @@ function TaskRow({
   onDelete,
 }: {
   name: string;
-  status: string;
+  due?: string;
   busy: boolean;
   completed: boolean;
   onOpen: () => void;
@@ -47,42 +49,95 @@ function TaskRow({
 }) {
   const colors = useAuthColors();
   const [expanded, setExpanded] = useState(false);
-  const canAct = !!onToggle && !!onDelete;
+  const canDelete = !!onDelete;
   const swipe = PanResponder.create({
     onMoveShouldSetPanResponderCapture: (_, { dx, dy }) =>
-      canAct && !busy && Math.abs(dx) > 24 && Math.abs(dx) > 2 * Math.abs(dy),
+      canDelete && !busy && Math.abs(dx) > 24 && Math.abs(dx) > 2 * Math.abs(dy),
     onPanResponderRelease: (_, { dx }) => {
       if (dx < -44) setExpanded(true);
       if (dx > 44) setExpanded(false);
     },
   });
   return (
-    <View
-      {...swipe.panHandlers}
-      style={{ gap: 8, borderTopColor: colors.border, borderTopWidth: 1, paddingTop: 12 }}
-    >
-      <TaskButton label={`Open ${name}`} disabled={busy} onPress={onOpen} />
-      <Text style={{ color: colors.muted }}>{status}</Text>
-      {canAct && (
-        <TaskButton
-          label={`${expanded ? 'Hide actions for' : 'Actions for'} ${name}`}
+    <View {...swipe.panHandlers} style={[rowStyles.container, { borderTopColor: colors.border }]}>
+      <View style={rowStyles.row}>
+        <Pressable
+          accessibilityRole="checkbox"
+          accessibilityLabel={onToggle ? `${completed ? 'Reopen' : 'Complete'} ${name}` : name}
+          accessibilityState={{ checked: completed, disabled: busy || !onToggle }}
+          disabled={busy || !onToggle}
+          onPress={onToggle}
+          style={rowStyles.iconTarget}
+        >
+          <View
+            accessible={false}
+            style={[
+              rowStyles.circle,
+              {
+                borderColor: completed ? colors.action : colors.border,
+                backgroundColor: completed ? colors.action : undefined,
+              },
+            ]}
+          >
+            {completed && <Text style={{ color: colors.actionText, fontWeight: '700' }}>✓</Text>}
+          </View>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Open ${name}`}
+          accessibilityHint={due ? `Due ${due}` : undefined}
           disabled={busy}
-          onPress={() => setExpanded(!expanded)}
-        />
-      )}
-      {canAct && expanded && (
-        <>
-          <TaskButton
-            label={`${completed ? 'Reopen' : 'Complete'} ${name}`}
+          onPress={onOpen}
+          style={rowStyles.titleTarget}
+        >
+          <Text
+            style={{
+              color: completed ? colors.muted : colors.text,
+              fontSize: 17,
+              textDecorationLine: completed ? 'line-through' : 'none',
+            }}
+          >
+            {name}
+          </Text>
+          {due && <Text style={{ color: colors.muted, fontSize: 13 }}>Due {due}</Text>}
+        </Pressable>
+        {canDelete && (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`${expanded ? 'Hide actions for' : 'Actions for'} ${name}`}
+            accessibilityState={{ expanded }}
             disabled={busy}
-            onPress={onToggle}
-          />
+            onPress={() => setExpanded(!expanded)}
+            style={rowStyles.iconTarget}
+          >
+            <Text style={{ color: colors.text, fontSize: 22 }}>⋯</Text>
+          </Pressable>
+        )}
+      </View>
+      {canDelete && expanded && (
+        <View style={rowStyles.actions}>
           <TaskButton label={`Delete ${name}`} disabled={busy} onPress={onDelete} />
-        </>
+        </View>
       )}
     </View>
   );
 }
+
+const rowStyles = StyleSheet.create({
+  container: { borderTopWidth: StyleSheet.hairlineWidth },
+  row: { flexDirection: 'row', alignItems: 'center' },
+  iconTarget: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  circle: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  titleTarget: { flex: 1, minHeight: 44, justifyContent: 'center', paddingVertical: 6 },
+  actions: { alignItems: 'flex-end', paddingBottom: 8 },
+});
 
 export function TasksScreen({
   session,
@@ -256,7 +311,7 @@ export function TasksScreen({
                     busy={busy}
                     completed={entry.completed}
                     onOpen={() => setSelected(item)}
-                    status={`${entry.completed ? 'Completed' : 'Open'}${entry.due ? ` · Due ${entry.due.value}` : ''}`}
+                    due={entry.due?.value}
                     onToggle={
                       basic
                         ? () =>

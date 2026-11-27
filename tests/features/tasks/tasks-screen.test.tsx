@@ -87,16 +87,32 @@ it('opens a read-only list without offering writes', async () => {
     />,
   );
   expect(screen.queryByRole('button', { name: 'Add task' })).toBeNull();
-  await fireEvent.press(await screen.findByRole('button', { name: 'Open Buy milk' }));
+  const open = await screen.findByRole('button', { name: 'Open Buy milk' });
+  expect(screen.getByRole('checkbox', { name: 'Buy milk', checked: false })).toBeDisabled();
+  expect(screen.queryByRole('button', { name: 'Actions for Buy milk' })).toBeNull();
+  await fireEvent.press(open);
   expect(screen.getByText('Read-only task')).toBeOnTheScreen();
   expect(screen.queryByRole('button', { name: 'Save task' })).toBeNull();
 });
 
-it('offers an accessible alternative to swiping for completion', async () => {
+it('shows completion in the row and lets the circle complete or reopen the task', async () => {
+  const completedItem = {
+    ...item,
+    etag: '"2"',
+    resource: parseVTodoResource(
+      item.resource.serialize().replace('END:VTODO', 'STATUS:COMPLETED\r\nEND:VTODO'),
+    ),
+  };
   jest.mocked(service.updateTask).mockResolvedValue(undefined);
+  jest
+    .mocked(service.listTasks)
+    .mockResolvedValueOnce([item])
+    .mockResolvedValueOnce([completedItem]);
   await render(<TasksScreen session={session} calendar={calendar} onBack={jest.fn()} />);
-  await fireEvent.press(await screen.findByRole('button', { name: 'Actions for Buy milk' }));
-  await fireEvent.press(screen.getByRole('button', { name: 'Complete Buy milk' }));
+  const circle = await screen.findByRole('checkbox', { name: 'Complete Buy milk', checked: false });
+  expect(screen.getByText('Buy milk')).toHaveStyle({ textDecorationLine: 'none' });
+  expect(screen.queryByText('Open')).toBeNull();
+  await fireEvent.press(circle);
   expect(service.updateTask).toHaveBeenCalledWith(
     session,
     calendar,
@@ -104,4 +120,26 @@ it('offers an accessible alternative to swiping for completion', async () => {
     { completed: true, at: expect.any(Date) },
     undefined,
   );
+  const checkedCircle = await screen.findByRole('checkbox', {
+    name: 'Reopen Buy milk',
+    checked: true,
+  });
+  expect(screen.getByText('Buy milk')).toHaveStyle({ textDecorationLine: 'line-through' });
+  expect(screen.queryByText('Completed')).toBeNull();
+  await fireEvent.press(checkedCircle);
+  expect(service.updateTask).toHaveBeenLastCalledWith(
+    session,
+    calendar,
+    completedItem,
+    { completed: false, at: expect.any(Date) },
+    undefined,
+  );
+});
+
+it('keeps deletion out of the row until the actions menu is opened', async () => {
+  await render(<TasksScreen session={session} calendar={calendar} onBack={jest.fn()} />);
+  const menu = await screen.findByRole('button', { name: 'Actions for Buy milk', expanded: false });
+  expect(screen.queryByRole('button', { name: 'Delete Buy milk' })).toBeNull();
+  await fireEvent.press(menu);
+  expect(screen.getByRole('button', { name: 'Delete Buy milk' })).toBeOnTheScreen();
 });

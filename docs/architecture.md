@@ -371,8 +371,9 @@ expand occurrences or complete recurring tasks.
 Opening a readable active list uses the discovered collection and the
 authenticated session in memory. The task screen offers quick add, a
 metadata editor, simple recurrence controls, and completion, reopening,
-and confirmed deletion for non-recurring tasks. A swipe reveals actions;
-the same controls are available by button. Writes reload server state.
+and confirmed deletion for non-recurring tasks. Each task has a compact
+row with a completion circle and a tappable title. Completed titles are
+struck through. A swipe or the row's menu reveals Delete. Writes reload server state.
 An error blocks further mutations until refresh, avoiding retries with
 an old ETag. Hierarchy and moves remain service APIs; smart views and
 offline editing are separate work.
