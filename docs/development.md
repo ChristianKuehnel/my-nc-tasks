@@ -135,7 +135,8 @@ Use the circular-arrow icon beside the list title to refresh its tasks.
    date, and confirm the values match Nextcloud Tasks after refreshing.
 2. Tap the circle to complete the task. Verify that the circle is checked
    and the task moves below the **Completed** separator with its title
-   struck through. Tap the separator to hide or show completed tasks;
+   struck through when shown. Completed tasks start hidden. Tap the
+   down chevron to show them or the up chevron to hide them;
    open tasks should stay visible above it. Tap the task's circle again
    to reopen it and confirm it moves back above the separator.
    Swipe left or tap **⋯** to reveal Delete, then confirm deletion.

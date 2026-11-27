@@ -375,7 +375,7 @@ the correct previous screen. The task screen offers quick add, a
 metadata editor, simple recurrence controls, and completion, reopening,
 and confirmed deletion for non-recurring tasks. Each task has a compact
 row with a completion circle and a tappable title. Open tasks appear
-first; completed tasks sit below a collapsible separator with a count.
+first; completed tasks sit below a separator with a count and are collapsed by default.
 Completed titles are
 struck through. A swipe or the row's menu reveals Delete. Writes reload server state.
 An error blocks further mutations until refresh, avoiding retries with

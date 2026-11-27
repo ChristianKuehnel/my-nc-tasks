@@ -174,7 +174,7 @@ export function TasksScreen({
 }) {
   const colors = useAuthColors();
   const [tasks, setTasks] = useState<DavTask[] | null>(null);
-  const [completedExpanded, setCompletedExpanded] = useState(true);
+  const [completedExpanded, setCompletedExpanded] = useState(false);
   const [title, setTitle] = useState('');
   const [busy, setBusy] = useState(!selected);
   const [error, setError] = useState<string | null>(null);
@@ -387,7 +387,7 @@ export function TasksScreen({
                       <Text style={{ color: colors.text, fontWeight: '600' }}>
                         Completed ({completedRows.length})
                       </Text>
-                      <Text style={{ color: colors.muted }}>{completedExpanded ? '▾' : '▸'}</Text>
+                      <Text style={{ color: colors.muted }}>{completedExpanded ? '⌃' : '⌄'}</Text>
                     </Pressable>
                     {completedExpanded && completedRows}
                   </View>

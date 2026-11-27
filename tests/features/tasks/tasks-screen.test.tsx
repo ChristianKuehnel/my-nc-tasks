@@ -151,7 +151,13 @@ it('shows completion in the row and lets the circle complete or reopen the task'
     { completed: true, at: expect.any(Date) },
     undefined,
   );
-  const checkedCircle = await screen.findByRole('checkbox', {
+  const separator = await screen.findByRole('button', {
+    name: 'Completed tasks (1)',
+    expanded: false,
+  });
+  expect(screen.queryByRole('checkbox', { name: 'Reopen Buy milk' })).toBeNull();
+  await fireEvent.press(separator);
+  const checkedCircle = screen.getByRole('checkbox', {
     name: 'Reopen Buy milk',
     checked: true,
   });
@@ -173,7 +179,7 @@ it('shows completion in the row and lets the circle complete or reopen the task'
   expect(screen.queryByRole('button', { name: 'Completed tasks (1)' })).toBeNull();
 });
 
-it('puts open tasks first and collapses only the completed section', async () => {
+it('starts with completed tasks collapsed and shows the chevron for the next action', async () => {
   const done = {
     ...item,
     url: `${calendar.url}done.ics`,
@@ -188,7 +194,12 @@ it('puts open tasks first and collapses only the completed section', async () =>
   await render(<TasksScreen session={session} calendar={calendar} onBack={jest.fn()} />);
 
   const open = await screen.findByRole('button', { name: 'Open Buy milk' });
+  const collapsed = screen.getByRole('button', { name: 'Completed tasks (1)', expanded: false });
+  expect(collapsed).toHaveTextContent(/⌄$/);
+  expect(screen.queryByRole('button', { name: 'Open Buy bread' })).toBeNull();
+  await fireEvent.press(collapsed);
   const separator = screen.getByRole('button', { name: 'Completed tasks (1)', expanded: true });
+  expect(separator).toHaveTextContent(/⌃$/);
   const completed = screen.getByRole('button', { name: 'Open Buy bread' });
   expect(screen.getAllByRole('button', { name: /^(Open Buy|Completed tasks)/ })).toEqual([
     open,
@@ -198,10 +209,9 @@ it('puts open tasks first and collapses only the completed section', async () =>
   await fireEvent.press(separator);
   expect(screen.queryByRole('button', { name: 'Open Buy bread' })).toBeNull();
   expect(open).toBeOnTheScreen();
-  await fireEvent.press(
+  expect(
     screen.getByRole('button', { name: 'Completed tasks (1)', expanded: false }),
-  );
-  expect(screen.getByRole('button', { name: 'Open Buy bread' })).toBeOnTheScreen();
+  ).toHaveTextContent(/⌄$/);
   expect(service.listTasks).toHaveBeenCalledTimes(1);
 });
 
