@@ -134,7 +134,10 @@ Use the circular-arrow icon beside the list title to refresh its tasks.
 1. Quickly add a task, open it, edit the title, notes, priority, and due
    date, and confirm the values match Nextcloud Tasks after refreshing.
 2. Tap the circle to complete the task. Verify that the circle is checked
-   and the title is struck through. Tap the circle again to reopen it.
+   and the task moves below the **Completed** separator with its title
+   struck through. Tap the separator to hide or show completed tasks;
+   open tasks should stay visible above it. Tap the task's circle again
+   to reopen it and confirm it moves back above the separator.
    Swipe left or tap **⋯** to reveal Delete, then confirm deletion.
 3. Give a different task a start date, reopen it, and add or remove a
    simple repeat rule. Check that a task with an advanced rule is readable

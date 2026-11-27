@@ -1,5 +1,5 @@
 import { randomUUID } from 'expo-crypto';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -143,6 +143,18 @@ const headerStyles = StyleSheet.create({
   refresh: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
 });
 
+const sectionStyles = StyleSheet.create({
+  separator: {
+    minHeight: 44,
+    paddingHorizontal: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+});
+
 export function TasksScreen({
   session,
   calendar,
@@ -162,6 +174,7 @@ export function TasksScreen({
 }) {
   const colors = useAuthColors();
   const [tasks, setTasks] = useState<DavTask[] | null>(null);
+  const [completedExpanded, setCompletedExpanded] = useState(true);
   const [title, setTitle] = useState('');
   const [busy, setBusy] = useState(!selected);
   const [error, setError] = useState<string | null>(null);
@@ -237,6 +250,58 @@ export function TasksScreen({
       );
   };
   const disabled = busy || !canWrite;
+  const openRows: ReactElement[] = [];
+  const completedRows: ReactElement[] = [];
+  for (const item of tasks ?? []) {
+    const entry =
+      item.resource.occurrences.find(({ recurrenceId }) => recurrenceId === null) ??
+      item.resource.occurrences[0];
+    const name = entry.summary || 'Untitled task';
+    const recurrence = readTaskRecurrence(item.resource.serialize());
+    const basic =
+      canWrite &&
+      !!item.etag &&
+      !item.etag.startsWith('W/') &&
+      (recurrence.kind === 'none' || recurrence.kind === 'unavailable');
+    const rows = entry.completed ? completedRows : openRows;
+    rows.push(
+      <TaskRow
+        key={item.url}
+        name={name}
+        busy={busy}
+        completed={entry.completed}
+        onOpen={() => onOpenTask?.(item)}
+        due={entry.due?.value}
+        onToggle={
+          basic
+            ? () =>
+                void run(() =>
+                  updateTask(
+                    session,
+                    calendar,
+                    item,
+                    { completed: !entry.completed, at: new Date() },
+                    options,
+                  ),
+                )
+            : undefined
+        }
+        onDelete={
+          basic
+            ? () =>
+                Alert.alert('Delete task?', `Remove “${name}” from this list?`, [
+                  { text: 'Cancel', style: 'cancel' },
+                  {
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: () => void run(() => deleteTask(session, calendar, item, options)),
+                  },
+                ])
+            : undefined
+        }
+      />,
+    );
+  }
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
@@ -302,56 +367,32 @@ export function TasksScreen({
                 </>
               )}
               {tasks?.length === 0 && <Text style={{ color: colors.muted }}>No tasks yet.</Text>}
-              {tasks?.map((item) => {
-                const entry =
-                  item.resource.occurrences.find(({ recurrenceId }) => recurrenceId === null) ??
-                  item.resource.occurrences[0];
-                const name = entry.summary || 'Untitled task';
-                const recurrence = readTaskRecurrence(item.resource.serialize());
-                const basic =
-                  canWrite &&
-                  !!item.etag &&
-                  !item.etag.startsWith('W/') &&
-                  (recurrence.kind === 'none' || recurrence.kind === 'unavailable');
-                return (
-                  <TaskRow
-                    key={item.url}
-                    name={name}
-                    busy={busy}
-                    completed={entry.completed}
-                    onOpen={() => onOpenTask?.(item)}
-                    due={entry.due?.value}
-                    onToggle={
-                      basic
-                        ? () =>
-                            void run(() =>
-                              updateTask(
-                                session,
-                                calendar,
-                                item,
-                                { completed: !entry.completed, at: new Date() },
-                                options,
-                              ),
-                            )
-                        : undefined
-                    }
-                    onDelete={
-                      basic
-                        ? () =>
-                            Alert.alert('Delete task?', `Remove “${name}” from this list?`, [
-                              { text: 'Cancel', style: 'cancel' },
-                              {
-                                text: 'Delete',
-                                style: 'destructive',
-                                onPress: () =>
-                                  void run(() => deleteTask(session, calendar, item, options)),
-                              },
-                            ])
-                        : undefined
-                    }
-                  />
-                );
-              })}
+              <View>{openRows}</View>
+              {completedRows.length > 0 && (
+                <>
+                  {openRows.length === 0 && (
+                    <Text style={{ color: colors.muted }}>No open tasks.</Text>
+                  )}
+                  <View>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Completed tasks (${completedRows.length})`}
+                      accessibilityState={{ expanded: completedExpanded }}
+                      onPress={() => setCompletedExpanded((expanded) => !expanded)}
+                      style={[
+                        sectionStyles.separator,
+                        { backgroundColor: colors.surface, borderTopColor: colors.border },
+                      ]}
+                    >
+                      <Text style={{ color: colors.text, fontWeight: '600' }}>
+                        Completed ({completedRows.length})
+                      </Text>
+                      <Text style={{ color: colors.muted }}>{completedExpanded ? '▾' : '▸'}</Text>
+                    </Pressable>
+                    {completedExpanded && completedRows}
+                  </View>
+                </>
+              )}
             </>
           )}
         </ScrollView>

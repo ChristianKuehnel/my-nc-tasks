@@ -374,7 +374,9 @@ editor have separate native stack entries so iOS back gestures reveal
 the correct previous screen. The task screen offers quick add, a
 metadata editor, simple recurrence controls, and completion, reopening,
 and confirmed deletion for non-recurring tasks. Each task has a compact
-row with a completion circle and a tappable title. Completed titles are
+row with a completion circle and a tappable title. Open tasks appear
+first; completed tasks sit below a collapsible separator with a count.
+Completed titles are
 struck through. A swipe or the row's menu reveals Delete. Writes reload server state.
 An error blocks further mutations until refresh, avoiding retries with
 an old ETag. Hierarchy and moves remain service APIs; smart views and

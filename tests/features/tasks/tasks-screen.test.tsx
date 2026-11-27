@@ -156,7 +156,9 @@ it('shows completion in the row and lets the circle complete or reopen the task'
     checked: true,
   });
   expect(screen.getByText('Buy milk')).toHaveStyle({ textDecorationLine: 'line-through' });
-  expect(screen.queryByText('Completed')).toBeNull();
+  expect(
+    screen.getByRole('button', { name: 'Completed tasks (1)', expanded: true }),
+  ).toBeOnTheScreen();
   await fireEvent.press(checkedCircle);
   expect(service.updateTask).toHaveBeenLastCalledWith(
     session,
@@ -165,6 +167,42 @@ it('shows completion in the row and lets the circle complete or reopen the task'
     { completed: false, at: expect.any(Date) },
     undefined,
   );
+  expect(
+    await screen.findByRole('checkbox', { name: 'Complete Buy milk', checked: false }),
+  ).toBeOnTheScreen();
+  expect(screen.queryByRole('button', { name: 'Completed tasks (1)' })).toBeNull();
+});
+
+it('puts open tasks first and collapses only the completed section', async () => {
+  const done = {
+    ...item,
+    url: `${calendar.url}done.ics`,
+    resource: parseVTodoResource(
+      item.resource
+        .serialize()
+        .replace('UID:item', 'UID:done')
+        .replace('SUMMARY:Buy milk', 'SUMMARY:Buy bread\r\nSTATUS:COMPLETED'),
+    ),
+  };
+  jest.mocked(service.listTasks).mockResolvedValue([done, item]);
+  await render(<TasksScreen session={session} calendar={calendar} onBack={jest.fn()} />);
+
+  const open = await screen.findByRole('button', { name: 'Open Buy milk' });
+  const separator = screen.getByRole('button', { name: 'Completed tasks (1)', expanded: true });
+  const completed = screen.getByRole('button', { name: 'Open Buy bread' });
+  expect(screen.getAllByRole('button', { name: /^(Open Buy|Completed tasks)/ })).toEqual([
+    open,
+    separator,
+    completed,
+  ]);
+  await fireEvent.press(separator);
+  expect(screen.queryByRole('button', { name: 'Open Buy bread' })).toBeNull();
+  expect(open).toBeOnTheScreen();
+  await fireEvent.press(
+    screen.getByRole('button', { name: 'Completed tasks (1)', expanded: false }),
+  );
+  expect(screen.getByRole('button', { name: 'Open Buy bread' })).toBeOnTheScreen();
+  expect(service.listTasks).toHaveBeenCalledTimes(1);
 });
 
 it('keeps deletion out of the row until the actions menu is opened', async () => {
