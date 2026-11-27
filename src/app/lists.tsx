@@ -1,7 +1,9 @@
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { router } from 'expo-router';
 
 import { ListsScreen } from '@/features/lists/lists-screen';
 import { useAuth } from '@/features/auth/use-auth';
+import { useTaskNavigation } from '@/features/tasks/task-navigation';
 
 /**
  * Task list route (Phase 1.3). Only reachable while authenticated; the
@@ -10,8 +12,10 @@ import { useAuth } from '@/features/auth/use-auth';
  */
 export default function ListsRoute() {
   const auth = useAuth();
+  const session = auth.session;
+  const navigation = useTaskNavigation(session);
 
-  if (auth.status !== 'authenticated' || auth.session === null) {
+  if (auth.status !== 'authenticated' || session === null) {
     return (
       <View style={styles.loading} accessibilityLiveRegion="polite">
         <ActivityIndicator size="large" />
@@ -20,7 +24,19 @@ export default function ListsRoute() {
     );
   }
 
-  return <ListsScreen session={auth.session} />;
+  return (
+    <ListsScreen
+      session={session}
+      onOpenList={
+        navigation
+          ? (calendar) => {
+              navigation.selectCalendar(calendar, session);
+              router.push('/tasks');
+            }
+          : undefined
+      }
+    />
+  );
 }
 
 const styles = StyleSheet.create({

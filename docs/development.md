@@ -124,8 +124,31 @@ The app should open the task-list screen even if discovery is still
 loading, finds no lists, or reports an error.
 Once the lists load, create a uniquely named test list and confirm it
 appears without leaving the screen.
-Individual list rows are display-only in Phase 1.3; opening a list to
-view its tasks comes in Phase 2.
+Tap an active list name to open its tasks (Phase 2.6).
+
+### Phase 2.6: task screen on iPhone
+
+In Expo Go on a dedicated test account, open a disposable task list.
+Use the circular-arrow icon beside the list title to refresh its tasks.
+
+1. Quickly add a task, open it, edit the title, notes, priority, and due
+   date, and confirm the values match Nextcloud Tasks after refreshing.
+2. Tap the circle to complete the task. Verify that the circle is checked
+   and the task moves below the **Completed** separator with its title
+   struck through when shown. Completed tasks start hidden. Tap the
+   down chevron to show them or the up chevron to hide them;
+   open tasks should stay visible above it. Tap the task's circle again
+   to reopen it and confirm it moves back above the separator.
+   Swipe left or tap **⋯** to reveal Delete, then confirm deletion.
+3. Give a different task a start date, reopen it, and add or remove a
+   simple repeat rule. Check that a task with an advanced rule is readable
+   but not editable.
+4. Open a read-only share and check that mutation controls are absent.
+   Check that the task screen stays readable in Light and Dark mode.
+5. In a task editor, swipe right from the iPhone's left edge. Confirm the
+   gesture returns to the current list's tasks. Swipe again to return to
+   the list overview. Neither swipe should reveal **Connected**, even
+   while the screen is sliding. A third swipe returns to **Connected**.
 
 ### Phase 1.4: verifying rename, delete, and unsubscribe
 

@@ -22,6 +22,7 @@ interface ListsScreenProps {
   session: AuthSession;
   /** Optional dependency overrides (used by tests). */
   options?: CreateCalendarDeps;
+  onOpenList?: (calendar: CalDAVCalendar) => void;
 }
 
 /** Which dialog is open (at most one at a time), or `null`. */
@@ -62,7 +63,7 @@ function shareSubtitle(shares: CalendarShare[]): string | null {
  * servers, or explicitly deleted where Trash is unavailable. Shared lists
  * can only be unsubscribed, without changing the owner's data.
  */
-export function ListsScreen({ session, options }: ListsScreenProps) {
+export function ListsScreen({ session, options, onOpenList }: ListsScreenProps) {
   const lists = useLists(toCredentials(session), options);
   const [dialog, setDialog] = useState<Dialog>(null);
   const [showTrash, setShowTrash] = useState(false);
@@ -181,6 +182,7 @@ export function ListsScreen({ session, options }: ListsScreenProps) {
                     subtitle={shareSubtitle(lists.getShares(calendar.url))}
                     busy={busy}
                     onRename={() => openRename(calendar)}
+                    onOpen={calendar.canRead && onOpenList ? () => onOpenList(calendar) : undefined}
                     onShare={lists.sharingSupported ? () => openShare(calendar) : undefined}
                     onTrash={
                       lists.trashSupported && calendar.canWrite
@@ -206,6 +208,7 @@ export function ListsScreen({ session, options }: ListsScreenProps) {
                     subtitle={calendar.canWrite ? 'Shared with you' : 'Shared with you · read-only'}
                     busy={busy}
                     onUnsubscribe={() => setDialog({ kind: 'unsubscribe', calendar })}
+                    onOpen={calendar.canRead && onOpenList ? () => onOpenList(calendar) : undefined}
                   />
                 ))}
               </Section>
@@ -392,6 +395,7 @@ interface ListRowProps {
   onTrash?: () => void;
   onRestore?: () => void;
   onUnsubscribe?: () => void;
+  onOpen?: () => void;
 }
 
 function ListRow({
@@ -404,6 +408,7 @@ function ListRow({
   onTrash,
   onRestore,
   onUnsubscribe,
+  onOpen,
 }: ListRowProps) {
   const hasActions =
     onRename !== undefined ||
@@ -415,7 +420,19 @@ function ListRow({
   return (
     <View style={styles.row} accessibilityRole="listitem" accessibilityLabel={name}>
       <View style={styles.rowText}>
-        <Text style={styles.rowName}>{name}</Text>
+        {onOpen ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Open list ${name}`}
+            disabled={busy}
+            onPress={onOpen}
+            style={{ minHeight: 44, justifyContent: 'center' }}
+          >
+            <Text style={styles.rowName}>{name}</Text>
+          </Pressable>
+        ) : (
+          <Text style={styles.rowName}>{name}</Text>
+        )}
         {subtitle !== undefined && subtitle !== null && (
           <Text style={styles.rowSubtitle}>{subtitle}</Text>
         )}
