@@ -382,6 +382,23 @@ An error blocks further mutations until refresh, avoiding retries with
 an old ETag. Hierarchy and moves remain service APIs; smart views and
 offline editing are separate work.
 
+## Smart views and sorting (Phase 2.7)
+
+Smart views query readable active task lists on demand, with at most three
+lists loading at once. They do not create server-side collections or persist
+task data. Rows retain their source list so editing uses its permissions,
+and failures from one list are reported without hiding other lists' results.
+
+- **Today:** open tasks due today or earlier, or with a start date today.
+- **Scheduled:** open tasks with a start or due date, including overdue tasks.
+- **Important:** open tasks with priorities 1–4 (0 means no priority).
+- **All:** open tasks first, followed by completed tasks.
+
+Date sort uses the due day, falling back to the start day, with undated
+items last. UTC timestamps use the device's local day; all-day, floating
+and TZID timestamps keep their recorded calendar day. Recurring resources
+appear once; these views do not expand future occurrences.
+
 ## Data safety principles
 
 - iCalendar `VTODO` data round-trips must preserve UIDs, unknown properties,

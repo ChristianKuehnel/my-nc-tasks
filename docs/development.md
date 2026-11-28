@@ -150,6 +150,14 @@ Use the circular-arrow icon beside the list title to refresh its tasks.
    the list overview. Neither swipe should reveal **Connected**, even
    while the screen is sliding. A third swipe returns to **Connected**.
 
+### Phase 2.7: smart views on iPhone
+
+From **Task lists**, open Today, Scheduled, All, and Important. Using two
+disposable lists, check that an overdue task appears in Today, a future
+dated task appears in Scheduled, a task with priority 1 appears in
+Important, and completed tasks appear last in All. Try each sort option
+and open a task to confirm its original list and permissions are retained.
+
 ### Phase 1.4: verifying rename, delete, and unsubscribe
 
 In Expo Go, sign in on the dedicated test account and open the task-list

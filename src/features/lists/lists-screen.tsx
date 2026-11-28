@@ -16,6 +16,7 @@ import type { CreateCalendarDeps } from '@/services/caldav/collections';
 import type { CalendarShare, SharePrincipal } from '@/services/caldav/sharing';
 import type { CalDAVCalendar } from '@/services/caldav/types';
 import type { AuthSession } from '@/services/nextcloud/types';
+import { smartViews, type SmartView } from '@/features/tasks/smart-views';
 import { useLists, type UseListsResult } from './use-lists';
 
 interface ListsScreenProps {
@@ -23,6 +24,7 @@ interface ListsScreenProps {
   /** Optional dependency overrides (used by tests). */
   options?: CreateCalendarDeps;
   onOpenList?: (calendar: CalDAVCalendar) => void;
+  onOpenSmartView?: (view: SmartView) => void;
 }
 
 /** Which dialog is open (at most one at a time), or `null`. */
@@ -63,7 +65,7 @@ function shareSubtitle(shares: CalendarShare[]): string | null {
  * servers, or explicitly deleted where Trash is unavailable. Shared lists
  * can only be unsubscribed, without changing the owner's data.
  */
-export function ListsScreen({ session, options, onOpenList }: ListsScreenProps) {
+export function ListsScreen({ session, options, onOpenList, onOpenSmartView }: ListsScreenProps) {
   const lists = useLists(toCredentials(session), options);
   const [dialog, setDialog] = useState<Dialog>(null);
   const [showTrash, setShowTrash] = useState(false);
@@ -165,6 +167,21 @@ export function ListsScreen({ session, options, onOpenList }: ListsScreenProps) 
           </Section>
         ) : (
           <>
+            {onOpenSmartView && (
+              <Section title="Smart views">
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                  {smartViews.map((view) => (
+                    <RowButton
+                      key={view}
+                      label={view}
+                      accessibilityLabel={`Open ${view} smart view`}
+                      disabled={busy}
+                      onPress={() => onOpenSmartView(view)}
+                    />
+                  ))}
+                </View>
+              </Section>
+            )}
             {!hasLists && (
               <View style={styles.empty}>
                 <Text style={styles.emptyText}>
