@@ -399,6 +399,20 @@ items last. UTC timestamps use the device's local day; all-day, floating
 and TZID timestamps keep their recorded calendar day. Recurring resources
 appear once; these views do not expand future occurrences.
 
+## SQLite foundation (Phase 3.1)
+
+`src/services/storage/database.ts` opens a private SQLite connection and
+applies versioned migrations before returning it. Schema changes and the
+`user_version` marker commit together. A failure rolls back, and an app
+older than the database refuses to open it rather than resetting it.
+
+Lists, tasks, share metadata, sync cursors, and pending operations are
+scoped to a server/login pair. The schema stores raw VTODO text and ETags
+without rewriting either. Foreign keys enforce account and list boundaries;
+removing a list snapshot does not delete pending edits. App passwords remain
+in SecureStore. This phase does not open the database from the UI or change
+the current network-first load behavior.
+
 ## Data safety principles
 
 - iCalendar `VTODO` data round-trips must preserve UIDs, unknown properties,
